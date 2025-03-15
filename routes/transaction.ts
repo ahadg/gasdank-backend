@@ -39,7 +39,7 @@ router.post('/', async (req: Request, res: Response) => {
       buyer_id,
       type: transactionType,
       notes,
-      price: price, // using the 'price' field from schema
+      price: price || payment, // using the 'price' field from schema
       sale_price: sale_price,
       profit: profit,
       items: [] // start with empty items array

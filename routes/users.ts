@@ -157,22 +157,35 @@ router.get('/stats/:user_id', async (req: Request, res: Response) => {
     ]);
     const inventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
 
-    // 4. Outstanding Balances: Sum of balance from all Buyer documents for this user.
+    // 4. Outstanding Balances: amount owe by buyer, they need to pay us.
     const outstandingBalancesAgg = await Buyer.aggregate([
-      { $match: { user_id: userObjectId } },
+      { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
       { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
     ]);
     const outstandingBalances = outstandingBalancesAgg[0]?.outstanding || 0;
-
+    
     // 5. Logged in User Balances: Get the currentBalance for the logged-in user.
-    let loggedInUserBalance = 0;
+    let allbuyertotalBalance = 0;
     const loggedInBuyer = await Buyer.findOne({ user_id: userObjectId });
-    loggedInUserBalance = loggedInBuyer?.currentBalance || 0;
+    allbuyertotalBalance = loggedInBuyer?.currentBalance || 0;
+
+    let loggedInUserTotalBalance = 0
+    const totalbalance = await Transaction.aggregate([
+      { 
+        $match: { 
+          user_id: userObjectId, 
+          type: "payment", 
+          //profit: { $exists: true } 
+        } 
+      },
+      { $group: { _id: null, total: { $sum: "$price" } } }
+    ]);
+    loggedInUserTotalBalance = totalbalance[0]?.total || 0
 
     // 6. Company Balances: For example, inventory value + logged in user's balance - outstanding balances.
-    const companyBalance = inventoryValue + loggedInUserBalance - outstandingBalances;
+    const companyBalance = inventoryValue  + outstandingBalances - allbuyertotalBalance;
 
-    res.status(200).json({ totalSales, totalProfit, inventoryValue, outstandingBalances, companyBalance });
+    res.status(200).json({ totalSales, totalProfit, inventoryValue, outstandingBalances,loggedInUserTotalBalance, companyBalance });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

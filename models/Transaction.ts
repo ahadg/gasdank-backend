@@ -36,7 +36,7 @@ const TransactionSchema: Schema = new Schema({
   transactionpayment_id : { type: Schema.Types.ObjectId, ref: 'TransactionPayment', },
   type : {type : String, default : "purchase"},
   notes: { type: String },
-  price: { type: Number, required: true },
+  price: { type: Number },
   sale_price : {type : Number},
   profit: { type: Number },
   items: [{
