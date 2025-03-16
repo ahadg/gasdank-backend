@@ -16,7 +16,7 @@ dotenv.config({ path: './.env' });
 // Import route modules
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
-import dashboardRoutes from './routes/dashboard';
+//import dashboardRoutes from './routes/dashboard';
 import buyersRoutes from './routes/buyers';
 import productsRoutes from './routes/products';
 import categoriesRoutes from './routes/categories';
@@ -46,7 +46,7 @@ app.get("/api/status", (req, res) => {
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+// app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/buyers', buyersRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/categories', categoriesRoutes);

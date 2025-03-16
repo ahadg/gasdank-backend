@@ -7,17 +7,18 @@ import Transaction from '../models/Transaction';
 import Inventory from '../models/Inventory';
 import Buyer from '../models/Buyer';
 import mongoose from 'mongoose';
+import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
 
 // Optionally protect all /api/users endpoints
-// router.use(authenticateJWT);
+router.use(authenticateJWT);
 
 // Number of salt rounds for bcrypt
 const saltRounds = 10;
 
 // GET /api/users - get all users
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', checkAccess("config","read"), async (req: Request, res: Response) => {
   try {
     const users = await User.find();
     res.status(200).json(users);
@@ -41,7 +42,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/users - create a new user
-router.post('/', async (req: Request, res: Response) => {
+router.post('/',checkAccess("config","create"), async (req: Request, res: Response) => {
   try {
     // Validate request body against schema
     const { error, value } = userSchema.validate(req.body);
@@ -69,7 +70,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PATCH /api/users/:id - update a user (with password hashing if password is provided)
-router.patch('/:id', async (req: Request, res: Response) => {
+router.patch('/:id',checkAccess("config","read"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -104,7 +105,7 @@ router.put('/', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/users - soft delete a user
-router.delete('/', async (req: Request, res: Response) => {
+router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     await User.findByIdAndUpdate(id, { deleted_at: new Date() });
@@ -114,7 +115,7 @@ router.delete('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/stats/:user_id', async (req: Request, res: Response) => {
+router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
     // Require a user_id query parameter

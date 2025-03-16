@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import User from '../models/User';
+import { authenticateJWT } from '../middlewares/authMiddleware';
 
 const router = Router();
+router.use(authenticateJWT);
 
 // GET /api/balance?userId=...
 router.get('/', async (req: Request, res: Response) => {

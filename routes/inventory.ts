@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
 import Inventory from '../models/Inventory';
+import { authenticateJWT } from '../middlewares/authMiddleware';
+import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
+router.use(authenticateJWT);
 
 // GET /api/inventory/outOfStock
-router.get('/outOfStock', async (req: Request, res: Response) => {
+router.get('/outOfStock',checkAccess("report","read"), async (req: Request, res: Response) => {
   try {
     const outOfStock = await Inventory.find({ qty: 0 });
     res.status(200).json(outOfStock);
@@ -14,7 +17,7 @@ router.get('/outOfStock', async (req: Request, res: Response) => {
 });
 
 // GET /api/inventory/lowInventory
-router.get('/lowInventory', async (req: Request, res: Response) => {
+router.get('/lowInventory', checkAccess("report","read"),async (req: Request, res: Response) => {
   try {
     const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 } });
     res.status(200).json(lowInventory);

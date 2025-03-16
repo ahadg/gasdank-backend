@@ -1,3 +1,4 @@
+import { error } from 'console';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
@@ -12,12 +13,14 @@ export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunct
     const token = authHeader.split(' ')[1];
     jwt.verify(token, process.env.JWT_SECRET as string, (err, user) => {
       if (err) {
-        return res.sendStatus(403);
+        console.log("err",err)
+        return res.status(403).json({error : "Your token has expired, please try signin"})
       }
       req.user = user;
       next();
     });
   } else {
-    res.sendStatus(401);
+    console.log("JWT token missing in header")
+    res.status(401).json({error : "JWT token missing in header"});
   }
 };

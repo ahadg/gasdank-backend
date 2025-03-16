@@ -22,6 +22,9 @@ const userSchema = Joi.object({
     'string.empty': `"password" cannot be an empty field`,
     'any.required': `"password" is required`
   }),
+  access: Joi.object().required().messages({
+    'any.required': `"access" is required`
+  }),
   email: Joi.string().email().required().messages({
     'string.email': `"email" must be a valid email`,
     'string.empty': `"email" cannot be an empty field`,

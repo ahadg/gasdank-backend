@@ -3,8 +3,10 @@ import User from '../models/User';
 import redisClient from '../utils/redisClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import { authenticateJWT } from '../middlewares/authMiddleware';
 
 const router = Router();
+//router.use(authenticateJWT);
 
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
@@ -23,9 +25,9 @@ router.post('/login', async (req: Request, res: Response) => {
     
     // Generate a JWT token (expires in 1 hour)
     const token = jwt.sign(
-      { id: user._id, email: user.email, permissions: ['dashboard', 'users', 'buyers', 'products', 'categories'] },
+      { id: user._id, email: user.email, access: user?.access },
       process.env.JWT_SECRET as string,
-      { expiresIn: '1h' }
+      { expiresIn: '297d' }
     );
     
     // Optionally cache session data in Redis

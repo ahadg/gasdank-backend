@@ -4,10 +4,13 @@ import TransactionItem from '../models/TransactionItem';
 import TransactionPayment from '../models/TransactionPayment';
 import Inventory from '../models/Inventory';
 import Buyer from '../models/Buyer';
+import { authenticateJWT } from '../middlewares/authMiddleware';
+import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
+router.use(authenticateJWT);
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', checkAccess("purchase","create"), async (req: Request, res: Response) => {
   // Expected payload:
   // {
   //   user_id: string,
@@ -126,7 +129,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/history/:buyer_id/:user_id', async (req: Request, res: Response) => {
+router.get('/history/:buyer_id/:user_id',checkAccess("wholesale","read"), async (req: Request, res: Response) => {
   try {
     const { buyer_id,user_id } = req.params;
     // Build a query condition based on provided parameters
@@ -163,7 +166,7 @@ router.get('/history/:buyer_id/:user_id', async (req: Request, res: Response) =>
   }
 });
 
-router.get('/itemshistory/:buyer_id/:inventory_id', async (req: Request, res: Response) => {
+router.get('/itemshistory/:buyer_id/:inventory_id',checkAccess("purchase","read"), async (req: Request, res: Response) => {
   try {
     console.log("req.params;",req.params)
     const { buyer_id,inventory_id } = req.params;

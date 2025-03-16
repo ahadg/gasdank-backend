@@ -1,9 +1,12 @@
 import { Router, Request, Response } from 'express';
 import Category from '../models/Category';
+import { authenticateJWT } from '../middlewares/authMiddleware';
+import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
+router.use(authenticateJWT);
 
-router.get('/:userid', async (req: Request, res: Response) => {
+router.get('/:userid',checkAccess("config","read"),async (req: Request, res: Response) => {
     try {
       const { userid } = req.params;
       const categories = await Category.find({user_id : userid});
@@ -24,7 +27,7 @@ router.get('/:userid', async (req: Request, res: Response) => {
 // });
 
 // POST /api/categories
-router.post('/', async (req: Request, res: Response) => {
+router.post('/',checkAccess("config","create"), async (req: Request, res: Response) => {
   try {
     const newCategory = new Category(req.body);
     await newCategory.save();

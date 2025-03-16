@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
 import Buyer from '../models/Buyer';
+import { authenticateJWT } from '../middlewares/authMiddleware';
+import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
+router.use(authenticateJWT);
 
 // POST /api/buyers - Create a new buyer
-router.post('/', async (req: Request, res: Response) => {
+router.post('/',checkAccess("wholesale","create"), async (req: Request, res: Response) => {
   try {
     const newBuyer = new Buyer(req.body);
     await newBuyer.save();
@@ -15,7 +18,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/buyers - List all buyers or filter by "user_id" id (assumed as UID)
-router.get('/', async (req: Request, res: Response) => {
+router.get('/',checkAccess("wholesale","read"), async (req: Request, res: Response) => {
   try {
     // If a query parameter "UID" is provided, filter by it.
     const { user_id } = req.query;
@@ -58,7 +61,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/buyers/:id - Delete a buyer by ID (optional)
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id',checkAccess("wholesale","delete"), async (req: Request, res: Response) => {
   try {
     const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
     if (!deletedBuyer) {

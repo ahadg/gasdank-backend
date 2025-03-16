@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
 import Inventory from '../models/Inventory';
+import { authenticateJWT } from '../middlewares/authMiddleware';
+import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
+router.use(authenticateJWT);
 
 
 // GET /api/products/:userid
-router.get('/:userid', async (req: Request, res: Response) => {
+router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
   try {
     const { userid } = req.params;
     const { category, page, limit } = req.query;
@@ -38,7 +41,7 @@ router.get('/:userid', async (req: Request, res: Response) => {
 });
 
 // GET /api/products/product/:id - Update a buyer by ID
-router.get('/product/:id', async (req: Request, res: Response) => {
+router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       console.log("id",id)
@@ -53,7 +56,7 @@ router.get('/product/:id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/products/:id - Update a buyer by ID
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', checkAccess("inventory","edit"),async (req: Request, res: Response) => {
     try {
       const updatedProduct = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
       if (!updatedProduct) {
@@ -66,7 +69,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/products
-router.post('/', async (req: Request, res: Response) => {
+router.post('/',checkAccess("inventory","create"), async (req: Request, res: Response) => {
   try {
     const newProduct = new Inventory(req.body);
     await newProduct.save();
@@ -77,7 +80,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/products (soft delete)
-router.delete('/', async (req: Request, res: Response) => {
+router.delete('/',checkAccess("inventory","delete"), async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     await Inventory.findByIdAndUpdate(id, { deleted_at: new Date() });
