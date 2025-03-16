@@ -1,0 +1,40 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main  # or your chosen branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the code from the repository
+      - uses: actions/checkout@v3
+
+      # Optionally set up Node.js if you want to run build or tests
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: '18'
+
+      # Optionally, install dependencies and run tests locally
+      # - name: Install dependencies and run tests
+      #   run: |
+      #     npm install
+      #     npm test
+
+      # Deploy to your VPS using an SSH action
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            cd ${{ secrets.PROJECT_PATH }}
+            git pull origin main
+            npm install --production
+            pm2 restart node-backend
