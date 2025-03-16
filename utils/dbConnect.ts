@@ -23,17 +23,30 @@ if (!global.mongoose) {
 }
 
 async function dbConnect() {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    cached.promise = mongoose
-      .connect(MONGODB_URI, { 
-        //useNewUrlParser: true, 
-        //useUnifiedTopology: true 
-    })
-      .then(m => m);
+  // Return cached connection if available
+  if (cached.conn) {
+    console.log('Using cached MongoDB connection.');
+    return cached.conn;
   }
-  cached.conn = await cached.promise;
-  return cached.conn;
+  
+  // Create new connection promise if none exists
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGODB_URI, {
+      // You can add options here if needed, for example:
+      // useNewUrlParser: true,
+      // useUnifiedTopology: true,
+    });
+  }
+  
+  try {
+    cached.conn = await cached.promise;
+    console.log('Successfully connected to MongoDB.');
+    return cached.conn;
+  } catch (error) {
+    console.error('Error connecting to MongoDB:', error);
+    throw error;
+  }
 }
+
 
 export default dbConnect;
