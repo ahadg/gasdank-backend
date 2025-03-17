@@ -36,7 +36,7 @@ jobs:
           script: |
             cd ${{ secrets.PROJECT_PATH }}
             git pull origin main
-            npm install --production
+            npm install
             npm install -g typescript
             npm run build
             pm2 restart node-backend
