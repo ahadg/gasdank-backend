@@ -13,15 +13,15 @@ import moment from 'moment';
 const router = Router();
 router.use(authenticateJWT);
 
-router.post('/', checkAccess("purchase","create"), async (req: Request, res: Response) => {
+router.post('/', checkAccess("sale","create"), async (req: Request, res: Response) => {
   // Expected payload:
   // {
   //   user_id: string,
   //   buyer_id: string,
   //   payment: number,
   //   notes?: string,
-  //   type?: "purchase" | "return" | "payment",
-  //   // For purchase/return:
+  //   type?: "sale" | "return" | "payment",
+  //   // For sale/return:
   //   items?: [{
   //      inventory_id: string,
   //      qty: number,
@@ -35,13 +35,13 @@ router.post('/', checkAccess("purchase","create"), async (req: Request, res: Res
   // }
   const { user_id, buyer_id, items, payment, price,total_shipping, sale_price, profit, notes, type, payment_method } = req.body;
   console.log("req.body", req.body);
-  // Default transaction type is "purchase"
-  const transactionType: string = type || "purchase";
+  // Default transaction type is "sale"
+  const transactionType: string = type || "sale";
 
 
-  for (const item of items) {
-    // For purchase, check inventory availability.
-    if (transactionType === "purchase") {
+  for (const item of items || []) {
+    // For sale, check inventory availability.
+    if (transactionType === "sale") {
       const inventoryItem = await Inventory.findById(item.inventory_id);
       if (!inventoryItem) {
         return res.status(404).json({ error: `Inventory item ${item.inventory_id} not found` });
@@ -82,7 +82,7 @@ router.post('/', checkAccess("purchase","create"), async (req: Request, res: Res
       });
       await transactionPayment.save();
       // Increase buyer's currentBalance by payment amount
-      await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: payment } });
+      await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -payment } });
       if(payment_method === "cash") {
         await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: payment }})
       } else {
@@ -92,13 +92,13 @@ router.post('/', checkAccess("purchase","create"), async (req: Request, res: Res
       transaction.transactionpayment_id = transactionPayment._id;
       await transaction.save();
     } else {
-      // For purchase and return, process each transaction item.
-      // For purchase: inventory decreases; for return: inventory increases.
+      // For sale and return, process each transaction item.
+      // For sale: inventory decreases; for return: inventory increases.
       const transactionItemIds: { transactionitem_id: any }[] = [];
 
       for (const item of items) {
-        // For purchase, check inventory availability.
-        if (transactionType === "purchase") {
+        // For sale, check inventory availability.
+        if (transactionType === "sale") {
           const inventoryItem = await Inventory.findById(item.inventory_id);
           if (!inventoryItem) {
             return res.status(404).json({ error: `Inventory item ${item.inventory_id} not found` });
@@ -131,15 +131,15 @@ router.post('/', checkAccess("purchase","create"), async (req: Request, res: Res
         // Collect the TransactionItem _id.
         transactionItemIds.push({ transactionitem_id: transactionItem._id });
         console.log("transactionType", transactionType);
-        // Determine inventory change: negative for purchase, positive for return.
+        // Determine inventory change: negative for sale, positive for return.
         const qtyChange = (transactionType === "return") ? (item.qty * item.measurement) : -(item.qty * item.measurement);
         console.log("qtyChange", qtyChange);
         
         // Update buyer's currentBalance accordingly.
-        if (transactionType === "purchase") {
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -(item.sale_price * item.measurement * item.qty) } });
+        if (transactionType === "sale") {
+          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: (item.sale_price * item.measurement * item.qty) } });
         } else if (transactionType === "return") {
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: (price * item.measurement * item.qty) } });
+          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -(price * item.measurement * item.qty) } });
         }
         // Update the inventory quantity.
         await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });
@@ -203,7 +203,7 @@ router.get('/history/:buyer_id/:user_id', checkAccess("wholesale", "read"), asyn
 });
 
 
-router.get('/itemshistory/:buyer_id/:inventory_id',checkAccess("purchase","read"), async (req: Request, res: Response) => {
+router.get('/itemshistory/:buyer_id/:inventory_id',checkAccess("sale","read"), async (req: Request, res: Response) => {
   try {
     console.log("req.params;",req.params)
     const { buyer_id,inventory_id } = req.params;
@@ -233,7 +233,7 @@ router.get('/itemshistory/:buyer_id/:inventory_id',checkAccess("purchase","read"
 });
 
 // recent tranaction
-router.get('/recent/:buyer_id/:inventory_id', checkAccess("purchase", "read"), async (req: Request, res: Response) => {
+router.get('/recent/:buyer_id/:inventory_id', checkAccess("sale", "read"), async (req: Request, res: Response) => {
   try {
     console.log("req.params:", req.params);
     const { buyer_id, inventory_id } = req.params;
@@ -245,7 +245,7 @@ router.get('/recent/:buyer_id/:inventory_id', checkAccess("purchase", "read"), a
     }
     if (inventory_id) {
       query.inventory_id = inventory_id;
-      query.type = "purchase"
+      query.type = "sale"
     }
     
 

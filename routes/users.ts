@@ -125,12 +125,12 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
     }
     const userObjectId = new mongoose.Types.ObjectId(user_id);
     
-    // 1. Total Sales: Sum of sale_price from "purchase" transactions for this user.
+    // 1. Total Sales: Sum of sale_price from "sale" transactions for this user.
     const totalSalesAgg = await Transaction.aggregate([
       { 
         $match: { 
           user_id: userObjectId, 
-          type: "purchase", 
+          type: "sale", 
           sale_price: { $exists: true } 
         } 
       },
@@ -138,12 +138,12 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
     ]);
     const totalSales = totalSalesAgg[0]?.totalSales || 0;
 
-    // 2. Total Profit: Sum of profit from "purchase" transactions for this user.
+    // 2. Total Profit: Sum of profit from "sale" transactions for this user.
     const totalProfitAgg = await Transaction.aggregate([
       { 
         $match: { 
           user_id: userObjectId, 
-          type: "purchase", 
+          type: "sale", 
           profit: { $exists: true } 
         } 
       },

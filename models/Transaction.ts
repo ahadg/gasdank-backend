@@ -31,12 +31,12 @@ export interface ITransaction extends Document {
   updated_at: Date;
   deleted_at?: Date | null;
 }
- // type = "purchase/return/payment"
+ // type = "sale/return/payment"
 const TransactionSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
   transactionpayment_id : { type: Schema.Types.ObjectId, ref: 'TransactionPayment', },
-  type : {type : String, default : "purchase"},
+  type : {type : String, default : "sale"},
   notes: { type: String },
   price: { type: Number },
   sale_price : {type : Number},
