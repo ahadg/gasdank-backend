@@ -7,7 +7,7 @@ const router = Router();
 router.use(authenticateJWT);
 
 // GET /api/inventory/outOfStock
-router.get('/outOfStock',checkAccess("report","read"), async (req: Request, res: Response) => {
+router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res: Response) => {
   try {
     const outOfStock = await Inventory.find({ qty: 0 });
     res.status(200).json(outOfStock);
@@ -17,7 +17,7 @@ router.get('/outOfStock',checkAccess("report","read"), async (req: Request, res:
 });
 
 // GET /api/inventory/lowInventory
-router.get('/lowInventory', checkAccess("report","read"),async (req: Request, res: Response) => {
+router.get('/lowInventory', checkAccess("reports","read"),async (req: Request, res: Response) => {
   try {
     const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 } });
     res.status(200).json(lowInventory);
