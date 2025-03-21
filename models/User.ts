@@ -9,6 +9,8 @@ export interface IUser extends Document {
   phone?: string;
   inventory_value: number;
   balance : number;
+  online_balance: number;
+  cash_balance : number;
   access : object;
   created_at: Date;
   updated_at: Date;
@@ -24,6 +26,8 @@ const UserSchema: Schema = new Schema({
   phone: { type: String },
   inventory_value: {type : Number},
   balance : {type : Number},
+  online_balance: {type : Number},
+  cash_balance : {tpye : Number},
   access : {type : Object},
   role : {type : String, default : "user"},
   created_at: { type: Date, default: Date.now },

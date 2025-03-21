@@ -99,4 +99,17 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 });
 
+// GET /api/buyers/products/:id - Delete a buyer by ID (optional)
+// router.get('/:activereciept', async (req: Request, res: Response) => {
+//   try {
+//     const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
+//     if (!deletedBuyer) {
+//       return res.status(404).json({ message: 'Buyer not found' });
+//     }
+//     res.status(200).json({ message: 'Buyer deleted successfully' });
+//   } catch (error: any) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
 export default router;

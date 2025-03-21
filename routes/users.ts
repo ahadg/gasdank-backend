@@ -124,7 +124,7 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
       return res.status(400).json({ error: "user_id query parameter is required" });
     }
     const userObjectId = new mongoose.Types.ObjectId(user_id);
-
+    
     // 1. Total Sales: Sum of sale_price from "purchase" transactions for this user.
     const totalSalesAgg = await Transaction.aggregate([
       { 
@@ -183,10 +183,12 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
     ]);
     loggedInUserTotalBalance = totalbalance[0]?.total || 0
 
+    const user = await User.findById(userObjectId)
+
     // 6. Company Balances: For example, inventory value + logged in user's balance - outstanding balances.
     const companyBalance = inventoryValue  + outstandingBalances - allbuyertotalBalance;
 
-    res.status(200).json({ totalSales, totalProfit, inventoryValue, outstandingBalances,loggedInUserTotalBalance, companyBalance });
+    res.status(200).json({ totalSales, totalProfit, inventoryValue, outstandingBalances,loggedInUserTotalBalance,user,onlineBalance : user?.online_balance, companyBalance });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
