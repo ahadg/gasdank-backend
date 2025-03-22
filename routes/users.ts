@@ -158,37 +158,36 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
     ]);
     const inventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
 
-    // 4. Outstanding Balances: amount owe by buyer, they need to pay us.
-    const outstandingBalancesAgg = await Buyer.aggregate([
+    // 4. Outstanding Balances: amount owe by buyer, they need to pay us. Client's outstanding balance
+    const client_payable_balance_avg = await Buyer.aggregate([
+      { $match: { user_id: userObjectId, currentBalance: { $gt: 0 } } },
+      { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
+    ]);
+    const ClientoutPayableBalances = client_payable_balance_avg[0]?.outstanding || 0;
+    
+    // amount we owe
+    const company_payable_balance_avg = await Buyer.aggregate([
       { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
       { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
     ]);
-    const outstandingBalances = outstandingBalancesAgg[0]?.outstanding || 0;
+    const company_payable_balance = company_payable_balance_avg[0]?.outstanding || 0;
     
-    // 5. Logged in User Balances: Get the currentBalance for the logged-in user.
-    let allbuyertotalBalance = 0;
-    const loggedInBuyer = await Buyer.findOne({ user_id: userObjectId });
-    allbuyertotalBalance = loggedInBuyer?.currentBalance || 0;
-
-    let loggedInUserTotalBalance = 0
-    const totalbalance = await Transaction.aggregate([
-      { 
-        $match: { 
-          user_id: userObjectId, 
-          type: "payment", 
-          //profit: { $exists: true } 
-        } 
-      },
-      { $group: { _id: null, total: { $sum: "$price" } } }
-    ]);
-    loggedInUserTotalBalance = totalbalance[0]?.total || 0
 
     const user = await User.findById(userObjectId)
 
-    // 6. Company Balances: For example, inventory value + logged in user's balance - outstanding balances.
-    const companyBalance = inventoryValue  + outstandingBalances - allbuyertotalBalance;
+    // 6. Company Balances: inventory value + ClientoutPayableBalances + online_balance + cash_balance - Companay payable balance.
+    const companyBalance = inventoryValue  + ClientoutPayableBalances + user?.online_balance + user?.online_balance - company_payable_balance;
 
-    res.status(200).json({ totalSales, totalProfit, inventoryValue, outstandingBalances,loggedInUserTotalBalance,user,onlineBalance : user?.online_balance, companyBalance });
+    res.status(200).json({ 
+      totalSales, 
+      totalProfit, 
+      inventoryValue, 
+      company_payable_balance,
+      ClientoutPayableBalances,
+      loggedInUserTotalBalance : user?.cash_balance,user,
+      onlineBalance : user?.online_balance, 
+      companyBalance 
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

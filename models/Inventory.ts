@@ -3,6 +3,7 @@ import Category from './Category';
 
 export interface IInventory extends Document {
   user_id: mongoose.Types.ObjectId;
+  buyer_id: mongoose.Types.ObjectId;
 //   info: string;
   qty: number;
   unit: string;
@@ -17,6 +18,7 @@ export interface IInventory extends Document {
 
 const InventorySchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
 //   info: { type: String, required: true },
   qty: { type: Number, required: true },
   unit: { type: String, required: true },

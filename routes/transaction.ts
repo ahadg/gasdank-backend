@@ -83,7 +83,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       await transactionPayment.save();
       // Increase buyer's currentBalance by payment amount
       await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -payment } });
-      if(payment_method === "cash") {
+      if(payment_method === "Cash") {
         await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: payment }})
       } else {
         await User.findByIdAndUpdate(user_id, {$inc: { online_balance: payment }})
@@ -97,21 +97,6 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       const transactionItemIds: { transactionitem_id: any }[] = [];
 
       for (const item of items) {
-        // For sale, check inventory availability.
-        if (transactionType === "sale") {
-          const inventoryItem = await Inventory.findById(item.inventory_id);
-          if (!inventoryItem) {
-            return res.status(404).json({ error: `Inventory item ${item.inventory_id} not found` });
-          }
-          // Calculate the required quantity based on quantity and measurement multiplier.
-          const requiredQty = item.qty * item.measurement;
-          if (inventoryItem.qty < requiredQty) {
-            return res.status(400).json({ 
-              error: `Insufficient inventory for product ${inventoryItem.name}. Available: ${inventoryItem.qty}, Required: ${requiredQty}` 
-            });
-          }
-        }
-        
         // Create the transaction item record.
         const transactionItem = new TransactionItem({
           transaction_id: transaction._id,
@@ -247,7 +232,8 @@ router.get('/recent/:buyer_id/:inventory_id', checkAccess("sale", "read"), async
       query.inventory_id = inventory_id;
       query.type = "sale"
     }
-    
+
+    const buyer = await Buyer.findById(buyer_id)
 
     // Fetch the most recent transaction item matching the query.
     const recentTransactionItem = await TransactionItem.findOne(query)
@@ -261,7 +247,7 @@ router.get('/recent/:buyer_id/:inventory_id', checkAccess("sale", "read"), async
         model: 'Transaction'
       });
 
-    res.status(200).json(recentTransactionItem);
+    res.status(200).json({recentTransactionItem,buyer});
   } catch (error: any) {
     console.log("error", error);
     res.status(500).json({ error: error.message });

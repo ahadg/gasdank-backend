@@ -40,6 +40,39 @@ router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res:
   }
 });
 
+// GET /api/products/:userid
+router.get('/:userid/:buyerid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
+  try {
+    const { userid,buyerid } = req.params;
+    const { category, page, limit } = req.query;
+    
+    // Convert page and limit to numbers (default values: page 1, limit 10)
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build the query: always filter by user_id, add category filter if provided.
+    const query: any = { user_id: userid, buyer_id : buyerid };
+    if (category) {
+      query.info = { $regex: category, $options: 'i' };
+    }
+
+    // Get total number of matching documents (for pagination metadata)
+    const totalProducts = await Inventory.countDocuments(query);
+    // Fetch paginated results
+    const products = await Inventory.find(query).skip(skip).limit(limitNum);
+
+    res.status(200).json({
+      page: pageNum,
+      limit: limitNum,
+      totalProducts,
+      products
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/products/product/:id - Update a buyer by ID
 router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, res: Response) => {
     try {
