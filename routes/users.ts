@@ -167,8 +167,21 @@ router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Requ
     // 3. Inventory Value: Sum over all Inventory documents (price * qty) for this user.
     const inventoryValueAgg = await Inventory.aggregate([
       { $match: { user_id: userObjectId } },
-      { $group: { _id: null, inventoryValue: { $sum: { $multiply: ["$price", "$qty"] } } } }
+      { 
+        $group: { 
+          _id: null, 
+          inventoryValue: { 
+            $sum: { 
+              $add: [ 
+                { $multiply: ["$price", "$qty"] }, 
+                { $multiply: [ { $ifNull: ["$shippingCost", 0] }, "$qty" ] }
+              ] 
+            } 
+          } 
+        } 
+      }
     ]);
+    
     const inventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
 
     // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
@@ -197,7 +210,7 @@ router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Requ
       online_balance : user?.online_balance || 0,
       cash_balance : user?.cash_balance || 0
     })
-    const companyBalance = Number(inventoryValue) + Number(clientPayableBalances) + Number(user?.online_balance || 0) + Number(user?.cash_balance || 0) - Number(companyPayableBalance);
+    const companyBalance = Number(inventoryValue) + Number(clientPayableBalances) + Number(user?.online_balance || 0) + Number(user?.cash_balance || 0) - Math.abs(companyPayableBalance);
     console.log({companyBalance})
     res.status(200).json({
       totalSales,

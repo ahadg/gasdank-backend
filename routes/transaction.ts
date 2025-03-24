@@ -116,10 +116,11 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
          transactionItemIds.push({ transactionitem_id: transactionItem._id });
          console.log("transactionType", transactionType);
 
-         await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -price } });
          // Update the inventory quantity.
          //await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });
        }
+       console.log("(price + total_shipping)",(price + total_shipping))
+       await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -(price + total_shipping)  } });
  
        // Update the transaction document with the list of transaction item IDs.
        transaction.items = transactionItemIds;
@@ -155,9 +156,11 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
         
         // Update buyer's currentBalance accordingly.
         if (transactionType === "sale") {
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: (item.sale_price * item.measurement * item.qty) } });
+          console.log(item.sale_price * item.measurement * item.qty + item?.shipping)
+          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: (item.sale_price * item.measurement * item.qty) + (item.qty * item?.shipping ) } });
         } else if (transactionType === "return") {
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -(price * item.measurement * item.qty) } });
+          console.log(-(item.price * item.measurement * item.qty + (item.qty * item?.shipping )))
+          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -((item.price * item.measurement) * item.qty + (item.qty * item?.shipping )) } });
         }
         // Update the inventory quantity.
         await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });

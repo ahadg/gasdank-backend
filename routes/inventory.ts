@@ -9,7 +9,7 @@ router.use(authenticateJWT);
 // GET /api/inventory/outOfStock
 router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res: Response) => {
   try {
-    const outOfStock = await Inventory.find({ qty: 0 });
+    const outOfStock = await Inventory.find({ qty: 0 }).populate("category");
     res.status(200).json(outOfStock);
   } catch (error) {
     res.status(500).json({ error });
@@ -19,7 +19,7 @@ router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res
 // GET /api/inventory/lowInventory
 router.get('/lowInventory', checkAccess("reports","read"),async (req: Request, res: Response) => {
   try {
-    const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 } });
+    const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 } }).populate("category");
     res.status(200).json(lowInventory);
   } catch (error) {
     res.status(500).json({ error });
