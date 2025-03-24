@@ -91,6 +91,39 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       // Link the TransactionPayment record to the transaction
       transaction.transactionpayment_id = transactionPayment._id;
       await transaction.save();
+    } else if (transactionType === "inventory_addition") {
+       // For sale: inventory decreases; for return: inventory increases.
+       const transactionItemIds: { transactionitem_id: any }[] = [];
+
+       for (const item of items) {
+         // Create the transaction item record.
+         const transactionItem = new TransactionItem({
+           transaction_id: transaction._id,
+           inventory_id: item.inventory_id,
+           user_id,
+           buyer_id,
+           qty: item.qty,
+           measurement: item.measurement,
+           shipping : item?.shipping,
+           type,
+           unit: item.unit,
+           price: item.price,
+           sale_price: item.sale_price,
+         });
+         await transactionItem.save();
+ 
+         // Collect the TransactionItem _id.
+         transactionItemIds.push({ transactionitem_id: transactionItem._id });
+         console.log("transactionType", transactionType);
+
+         await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -price } });
+         // Update the inventory quantity.
+         //await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });
+       }
+ 
+       // Update the transaction document with the list of transaction item IDs.
+       transaction.items = transactionItemIds;
+       await transaction.save();
     } else {
       // For sale and return, process each transaction item.
       // For sale: inventory decreases; for return: inventory increases.

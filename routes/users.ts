@@ -115,23 +115,35 @@ router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Res
   }
 });
 
-router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Request, res: Response) => {
+router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
-    // Require a user_id query parameter
-    //const user_id = req.query.user_id as string;
     if (!user_id) {
-      return res.status(400).json({ error: "user_id query parameter is required" });
+      return res.status(400).json({ error: "user_id parameter is required" });
     }
     const userObjectId = new mongoose.Types.ObjectId(user_id);
-    
+
+    // Build a date filter if provided in the query parameters.
+    let dateFilter: any = {};
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+    if (startDate) {
+      dateFilter.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      dateFilter.$lte = new Date(endDate);
+    }
+    // Only add the date condition if at least one date is provided.
+    const dateCondition = Object.keys(dateFilter).length > 0 ? { created_at: dateFilter } : {};
+
     // 1. Total Sales: Sum of sale_price from "sale" transactions for this user.
     const totalSalesAgg = await Transaction.aggregate([
       { 
         $match: { 
           user_id: userObjectId, 
           type: "sale", 
-          sale_price: { $exists: true } 
+          sale_price: { $exists: true },
+          ...dateCondition
         } 
       },
       { $group: { _id: null, totalSales: { $sum: "$sale_price" } } }
@@ -144,7 +156,8 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
         $match: { 
           user_id: userObjectId, 
           type: "sale", 
-          profit: { $exists: true } 
+          profit: { $exists: true },
+          ...dateCondition
         } 
       },
       { $group: { _id: null, totalProfit: { $sum: "$profit" } } }
@@ -158,39 +171,48 @@ router.get('/stats/:user_id',checkAccess("dashboard","read"), async (req: Reques
     ]);
     const inventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
 
-    // 4. Outstanding Balances: amount owe by buyer, they need to pay us. Client's outstanding balance
-    const client_payable_balance_avg = await Buyer.aggregate([
+    // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
+    const clientPayableAgg = await Buyer.aggregate([
       { $match: { user_id: userObjectId, currentBalance: { $gt: 0 } } },
       { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
     ]);
-    const ClientoutPayableBalances = client_payable_balance_avg[0]?.outstanding || 0;
-    
-    // amount we owe
-    const company_payable_balance_avg = await Buyer.aggregate([
+    const clientPayableBalances = clientPayableAgg[0]?.outstanding || 0;
+
+    // Amount we owe: Sum of negative currentBalance from all Buyer documents.
+    const companyPayableAgg = await Buyer.aggregate([
       { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
       { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
     ]);
-    const company_payable_balance = company_payable_balance_avg[0]?.outstanding || 0;
-    
+    const companyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
 
-    const user = await User.findById(userObjectId)
+    // Get the logged-in user's financial details.
+    const user = await User.findById(userObjectId);
 
-    // 6. Company Balances: inventory value + ClientoutPayableBalances + online_balance + cash_balance - Companay payable balance.
-    const companyBalance = inventoryValue  + ClientoutPayableBalances + user?.online_balance + user?.online_balance - company_payable_balance;
-
-    res.status(200).json({ 
-      totalSales, 
-      totalProfit, 
-      inventoryValue, 
-      company_payable_balance,
-      ClientoutPayableBalances,
-      loggedInUserTotalBalance : user?.cash_balance,user,
-      onlineBalance : user?.online_balance, 
-      companyBalance 
+    // 6. Company Balance: For example, calculated as:
+    //    Inventory Value + Client Payable Balances + online_balance + cash_balance - (absolute value of company payable balance)
+    console.log({
+      inventoryValue,
+      clientPayableBalances,
+      companyPayableBalance,
+      online_balance : user?.online_balance || 0,
+      cash_balance : user?.cash_balance || 0
+    })
+    const companyBalance = Number(inventoryValue) + Number(clientPayableBalances) + Number(user?.online_balance || 0) + Number(user?.cash_balance || 0) - Number(companyPayableBalance);
+    console.log({companyBalance})
+    res.status(200).json({
+      totalSales,
+      totalProfit,
+      inventoryValue,
+      clientPayableBalances,
+      companyPayableBalance,
+      loggedInUserTotalBalance: user?.cash_balance,
+      onlineBalance: user?.online_balance,
+      companyBalance
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 export default router;

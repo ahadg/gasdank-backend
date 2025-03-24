@@ -27,7 +27,7 @@ router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res:
     // Get total number of matching documents (for pagination metadata)
     const totalProducts = await Inventory.countDocuments(query);
     // Fetch paginated results
-    const products = await Inventory.find(query).skip(skip).limit(limitNum);
+    const products = await Inventory.find(query).skip(skip).limit(limitNum).populate("category");
 
     res.status(200).json({
       page: pageNum,
@@ -54,13 +54,13 @@ router.get('/:userid/:buyerid',checkAccess("inventory","read"), async (req: Requ
     // Build the query: always filter by user_id, add category filter if provided.
     const query: any = { user_id: userid, buyer_id : buyerid };
     if (category) {
-      query.info = { $regex: category, $options: 'i' };
+      query.category =  category;
     }
 
     // Get total number of matching documents (for pagination metadata)
     const totalProducts = await Inventory.countDocuments(query);
     // Fetch paginated results
-    const products = await Inventory.find(query).skip(skip).limit(limitNum);
+    const products = await Inventory.find(query).skip(skip).limit(limitNum).populate("category");
 
     res.status(200).json({
       page: pageNum,
@@ -78,7 +78,7 @@ router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, 
     try {
       const { id } = req.params;
       console.log("id",id)
-      const updatedProduct = await Inventory.findById(id);
+      const updatedProduct = await Inventory.findById(id).populate("category");
       if (!updatedProduct) {
         return res.status(404).json({ message: 'Product not found' });
       }
@@ -104,6 +104,7 @@ router.put('/:id', checkAccess("inventory","edit"),async (req: Request, res: Res
 // POST /api/products
 router.post('/',checkAccess("inventory","create"), async (req: Request, res: Response) => {
   try {
+    console.log("req.body",req.body)
     const newProduct = new Inventory(req.body);
     await newProduct.save();
     res.status(201).json(newProduct);
