@@ -52,7 +52,9 @@ router.get('/:userid/:buyerid',checkAccess("inventory","read"), async (req: Requ
     const skip = (pageNum - 1) * limitNum;
 
     // Build the query: always filter by user_id, add category filter if provided.
-    const query: any = { user_id: userid, buyer_id : buyerid };
+    const query: any = { user_id: userid,
+      // buyer_id : buyerid 
+      };
     if (category) {
       query.category =  category;
     }

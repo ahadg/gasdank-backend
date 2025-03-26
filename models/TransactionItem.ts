@@ -9,6 +9,7 @@ export interface ITransactionItem extends Document {
   unit: string;
   measurement : number;
   shipping: number;
+  payment_direction : string;
   type : string;
   price: number;
   created_at: Date;
@@ -27,6 +28,7 @@ const TransactionItemSchema: Schema = new Schema({
   price: { type: Number, required: true },
   sale_price : {type : Number,},
   shipping: {type : Number},
+  payment_direction : {type : String},
   type : {type : String},
   profit : {type : Number, },
   created_at: { type: Date, default: Date.now },

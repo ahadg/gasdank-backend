@@ -4,6 +4,7 @@ export interface ITransactionPayment extends Document {
   transaction_id: mongoose.Types.ObjectId;
   buyer_id: mongoose.Types.ObjectId;
   amount_paid: number;
+  payment_direction : string;
   payment_method: string;
   payment_date: Date;
   created_at: Date;
@@ -15,6 +16,7 @@ const TransactionPaymentSchema: Schema = new Schema({
   buyer_id : { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
   amount_paid: { type: Number, required: true },
   payment_method: { type: String, required: true },
+  payment_direction : {type : String, required : true},
   payment_date: { type: Date, required: true },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }

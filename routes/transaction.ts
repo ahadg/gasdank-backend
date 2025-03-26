@@ -33,7 +33,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
   //   // For payment transactions:
   //   payment_method?: string
   // }
-  const { user_id, buyer_id, items, payment, price,total_shipping, sale_price, profit, notes, type, payment_method } = req.body;
+  const { user_id, buyer_id, items, payment, price,total_shipping, payment_direction, sale_price, profit, notes, type, payment_method } = req.body;
   console.log("req.body", req.body);
   // Default transaction type is "sale"
   const transactionType: string = type || "sale";
@@ -63,7 +63,9 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       buyer_id,
       type: transactionType,
       notes,
+      payment_method,
       price: price || payment, // using the 'price' field from schema
+      payment_direction,
       sale_price: sale_price,
       total_shipping : total_shipping,
       profit: profit,
@@ -77,16 +79,29 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
         transaction_id: transaction._id,
         buyer_id,
         amount_paid: payment,
+        payment_direction,
         payment_method: payment_method || "unspecified",
         payment_date: new Date(),
       });
       await transactionPayment.save();
       // Increase buyer's currentBalance by payment amount
-      await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -payment } });
+      if(payment_direction === "recieved") {
+        await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -payment } });
+      }  else {
+        await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: payment } });
+      }
       if(payment_method === "Cash") {
-        await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: payment }})
+        if(payment_direction === "recieved") {
+          await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: payment }})
+        } else if(payment_direction === "given") {
+          await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: -payment }})
+        }
       } else {
-        await User.findByIdAndUpdate(user_id, {$inc: { online_balance: payment }})
+        if(payment_direction === "recieved") {
+          await User.findByIdAndUpdate(user_id, {$inc: { online_balance: payment }})
+        } else if(payment_direction === "given") {
+          await User.findByIdAndUpdate(user_id, {$inc: { online_balance: -payment }})
+        }
       }
       // Link the TransactionPayment record to the transaction
       transaction.transactionpayment_id = transactionPayment._id;

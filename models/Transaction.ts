@@ -6,6 +6,7 @@ export interface ITransactionItem {
   unit: string;
   price: number;
   sale_price : number;
+  payment_direction : string,
   shipping : number;
   created_at: Date;
   updated_at: Date;
@@ -23,6 +24,8 @@ export interface ITransaction extends Document {
   total: number;
   amount_paid: number;
   total_shipping: number
+  payment_direction : string,
+  payment_method: string,
   type?: string;
   profit : number;
   sale_price : number;
@@ -36,6 +39,8 @@ const TransactionSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
   transactionpayment_id : { type: Schema.Types.ObjectId, ref: 'TransactionPayment', },
+  payment_direction : {type : String},
+  payment_method : {type : String},
   type : {type : String, default : "sale"},
   notes: { type: String },
   price: { type: Number },
