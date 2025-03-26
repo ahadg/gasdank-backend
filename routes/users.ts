@@ -104,6 +104,16 @@ router.put('/', async (req: Request, res: Response) => {
   }
 });
 
+router.put('/:user_id', async (req: Request, res: Response) => {
+  try {
+    const { user_id } = req.params;
+    const updatedUser = await User.findByIdAndUpdate(user_id, req.body, { new: true });
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ error });
+  }
+});
+
 // DELETE /api/users - soft delete a user
 router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Response) => {
   try {
