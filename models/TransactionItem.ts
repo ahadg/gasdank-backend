@@ -24,7 +24,7 @@ const TransactionItemSchema: Schema = new Schema({
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
   qty: { type: Number, required: true },
   unit: { type: String, required: true },
-  measurement : { type: String, required: true },
+  measurement : { type: Number },
   price: { type: Number, required: true },
   sale_price : {type : Number,},
   shipping: {type : Number},
