@@ -37,7 +37,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
   console.log("req.body", req.body);
   // Default transaction type is "sale"
   const transactionType: string = type || "sale";
-
+  const the_user = await User.findById(user_id)
 
   for (const item of items || []) {
     // For sale, check inventory availability.
@@ -97,11 +97,26 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
           await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: -payment }})
         }
       } else {
-        if(payment_direction === "recieved") {
-          await User.findByIdAndUpdate(user_id, {$inc: { online_balance: payment }})
-        } else if(payment_direction === "given") {
-          await User.findByIdAndUpdate(user_id, {$inc: { online_balance: -payment }})
+        console.log("the_user?.other_balance",the_user)
+        console.log("the_user?.other_balance",the_user?.other_balance)
+        if (!the_user?.other_balance?.hasOwnProperty(payment_method)) {
+          // Initialize the nested key to 0 if it doesn't exist.
+          await User.findByIdAndUpdate(user_id, { 
+            $set: { [`other_balance.${payment_method}`]: 0 }
+          });
         }
+        
+        if (payment_direction === "received") {
+          await User.findByIdAndUpdate(user_id, { 
+            $inc: { [`other_balance.${payment_method}`]: Number(payment) } 
+          });
+        } else if (payment_direction === "given") {
+          await User.findByIdAndUpdate(user_id, { 
+            $inc: { [`other_balance.${payment_method}`]: -Number(payment) } 
+          });
+        }
+        
+        
       }
       // Link the TransactionPayment record to the transaction
       transaction.transactionpayment_id = transactionPayment._id;

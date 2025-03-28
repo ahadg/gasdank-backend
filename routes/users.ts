@@ -220,7 +220,7 @@ router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Requ
       online_balance : user?.online_balance || 0,
       cash_balance : user?.cash_balance || 0
     })
-    const companyBalance = Number(inventoryValue) + Number(clientPayableBalances) + Number(user?.online_balance || 0) + Number(user?.cash_balance || 0) - Math.abs(companyPayableBalance);
+    const companyBalance = Number(inventoryValue) + Number(clientPayableBalances) + Number(user?.cash_balance || 0) - Math.abs(companyPayableBalance);
     console.log({companyBalance})
     res.status(200).json({
       totalSales,
@@ -230,7 +230,8 @@ router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Requ
       companyPayableBalance,
       loggedInUserTotalBalance: user?.cash_balance,
       onlineBalance: user?.online_balance,
-      companyBalance
+      companyBalance,
+      other_balance : user.other_balance
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
