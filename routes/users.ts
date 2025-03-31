@@ -230,7 +230,7 @@ router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Requ
       companyPayableBalance,
       loggedInUserTotalBalance: user?.cash_balance,
       onlineBalance: user?.online_balance,
-      companyBalance,
+      companyBalance : companyBalance.toFixed(2),
       other_balance : user.other_balance
     });
   } catch (error: any) {
