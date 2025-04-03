@@ -40,8 +40,8 @@ router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res:
   }
 });
 
-// GET /api/products/:userid
-router.get('/:userid/:buyerid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
+// GET /api/products/:userid/:buyerid
+router.get('/:userid/products/:buyerid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
   try {
     const { userid,buyerid } = req.params;
     const { category, page, limit } = req.query;
@@ -78,8 +78,9 @@ router.get('/:userid/:buyerid',checkAccess("inventory","read"), async (req: Requ
 // GET /api/products/product/:id - Update a buyer by ID
 router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, res: Response) => {
     try {
+
+      console.log("id",req.params)
       const { id } = req.params;
-      console.log("id",id)
       const updatedProduct = await Inventory.findById(id).populate("category");
       if (!updatedProduct) {
         return res.status(404).json({ message: 'Product not found' });
@@ -90,7 +91,7 @@ router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, 
     }
 });
 
-// PUT /api/products/:id - Update a buyer by ID
+// PUT /api/products/:id - Update a Product by ID
 router.put('/:id', checkAccess("inventory","edit"),async (req: Request, res: Response) => {
     try {
       const updatedProduct = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
