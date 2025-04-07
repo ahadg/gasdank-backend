@@ -10,6 +10,10 @@ const userSchema = Joi.object({
     'string.empty': `"lastName" cannot be an empty field`,
     'any.required': `"lastName" is required`
   }),
+  userName: Joi.string().required().messages({
+    'string.empty': `"userName" cannot be an empty field`,
+    'any.required': `"userName" is required`
+  }),
   role: Joi.string().required().messages({
     'string.empty': `"role" cannot be an empty field`,
     'any.required': `"role" is required`

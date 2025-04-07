@@ -17,6 +17,7 @@ export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunct
         return res.status(403).json({error : "Your token has expired, please try signin"})
       }
       req.user = user;
+      //console.log("userrr",user)
       next();
     });
   } else {

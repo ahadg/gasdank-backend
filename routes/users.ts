@@ -8,6 +8,7 @@ import Inventory from '../models/Inventory';
 import Buyer from '../models/Buyer';
 import mongoose from 'mongoose';
 import checkAccess from '../middlewares/accessMiddleware';
+import { createActivity } from './activity';
 
 const router = Router();
 
@@ -59,10 +60,22 @@ router.post('/',checkAccess("config","create"), async (req: Request, res: Respon
     // Hash the password before saving the user
     const hashedPassword = await bcrypt.hash(value.password, saltRounds);
     value.password = hashedPassword;
+    value.created_by = req.user?.id
 
     // Create and save the new user
     const newUser = new User(value);
     await newUser.save();
+
+    // create activity 
+    createActivity({
+      user_id : newUser?._id, 
+      user_created_by : req.user?.id,
+      action : "create",
+      resource_type : 'user',
+      page : "user",
+      type : "user_created",
+      description : `A new user ${value?.email} created`,
+    })
     res.status(201).json(newUser);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -124,6 +137,18 @@ router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Res
     res.status(500).json({ error });
   }
 });
+
+// DELETE /api/users - soft delete a user
+router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Response) => {
+  try {
+    const { id } = req.body;
+    await User.findByIdAndUpdate(id, { deleted_at: new Date() });
+    res.status(200).json({ message: 'User deleted' });
+  } catch (error) {
+    res.status(500).json({ error });
+  }
+});
+
 
 router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
   try {
@@ -225,12 +250,12 @@ router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Requ
     res.status(200).json({
       totalSales,
       totalProfit,
-      inventoryValue,
+      inventoryValue : inventoryValue?.toFixed(2),
       clientPayableBalances,
       companyPayableBalance,
       loggedInUserTotalBalance: user?.cash_balance,
       onlineBalance: user?.online_balance,
-      companyBalance : companyBalance.toFixed(2),
+      companyBalance : companyBalance?.toFixed(2),
       other_balance : user.other_balance
     });
   } catch (error: any) {

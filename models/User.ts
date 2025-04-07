@@ -3,12 +3,14 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IUser extends Document {
   firstName: string;
   lastName: string;
+  userName: string;
 //   PIN: string;
   password: string;
   email: string;
   phone?: string;
   inventory_value: number;
   balance : number;
+  created_by : mongoose.Types.ObjectId;
   other_balance: object;
   cash_balance : object;
   access : object;
@@ -18,8 +20,10 @@ export interface IUser extends Document {
 }
 
 const UserSchema: Schema = new Schema({
+  created_by:  { type: Schema.Types.ObjectId, ref: 'User', required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
+  userName : {type : String, required : true},
 //   PIN: { type: String, required: true },
   password: { type: String, required: true },
   email: { type: String, required: true, unique: true },

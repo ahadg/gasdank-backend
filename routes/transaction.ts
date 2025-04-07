@@ -8,10 +8,32 @@ import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
 import User from '../models/User';
 import moment from 'moment';
+import { createActivity } from './activity';
 
 
 const router = Router();
 router.use(authenticateJWT);
+
+
+
+const createlogs = (user:any,obj:any) => {
+  createActivity({
+    user_id : user?._id, 
+    user_created_by : user?.user_created_by,
+    action : "create",
+    resource_type : obj?.type,
+    page : "transaction",
+    type : obj?.type,
+    amount: obj?.amount, // used for financial activity
+    payment_method: obj?.payment_method, // e.g., 'credit_card', 'paypal'
+    payment_direction: obj?.payment_direction,
+    description : obj.description,
+    transaction_id : obj?.transaction_id,
+    buyer_id: obj?.buyer_id
+  })
+}
+ const formatCurrency = (value: number) =>
+    `$${value?.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 router.post('/', checkAccess("sale","create"), async (req: Request, res: Response) => {
   // Expected payload:
@@ -38,6 +60,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
   // Default transaction type is "sale"
   const transactionType: string = type || "sale";
   const the_user = await User.findById(user_id)
+  const the_buyer = await Buyer.findById(buyer_id)
 
   for (const item of items || []) {
     // For sale, check inventory availability.
@@ -84,14 +107,15 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
         payment_date: new Date(),
       });
       await transactionPayment.save();
-      // Increase buyer's currentBalance by payment amount
-      if(payment_direction === "recieved") {
+      // manage buyer's currentBalance by payment amount
+      if(payment_direction === "received") {
         await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -payment } });
       }  else {
         await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: payment } });
       }
+      // manage user's currentBalance by payment amount
       if(payment_method === "Cash") {
-        if(payment_direction === "recieved") {
+        if(payment_direction === "received") {
           await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: payment }})
         } else if(payment_direction === "given") {
           await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: -payment }})
@@ -121,12 +145,17 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       // Link the TransactionPayment record to the transaction
       transaction.transactionpayment_id = transactionPayment._id;
       await transaction.save();
+      createlogs(the_user,
+        {buyer_id,transaction_id : transaction?._id,type :transactionType,amount : payment_direction === "received" ? Number(payment) : -Number(payment),payment_method,payment_direction,
+        description : `${payment} ${payment_method} ${payment_direction} ${payment_direction === "received" ? "from" : "to"} ${the_buyer?.firstName + " " + the_buyer?.lastName}`
+      })
     } else if (transactionType === "inventory_addition") {
        // For sale: inventory decreases; for return: inventory increases.
        const transactionItemIds: { transactionitem_id: any }[] = [];
-
+       let description = ''
        for (const item of items) {
          // Create the transaction item record.
+          description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " +(formatCurrency(item.shipping * item.qty)) + ")")} \n`
          const transactionItem = new TransactionItem({
            transaction_id: transaction._id,
            inventory_id: item.inventory_id,
@@ -155,13 +184,18 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
        // Update the transaction document with the list of transaction item IDs.
        transaction.items = transactionItemIds;
        await transaction.save();
+       createlogs(the_user,
+        {buyer_id,type : transactionType,transaction_id : transaction?._id,amount : price + total_shipping,
+        description,
+      })
     } else {
       // For sale and return, process each transaction item.
       // For sale: inventory decreases; for return: inventory increases.
       const transactionItemIds: { transactionitem_id: any }[] = [];
-
+      let description = ''
       for (const item of items) {
         // Create the transaction item record.
+        description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " +(formatCurrency(item.shipping * item.qty)) + ")")} \n`
         const transactionItem = new TransactionItem({
           transaction_id: transaction._id,
           inventory_id: item.inventory_id,
@@ -190,7 +224,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
           await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: (item.sale_price * item.measurement * item.qty) + (item.qty * item?.shipping ) } });
         } else if (transactionType === "return") {
           console.log(-(item.price * item.measurement * item.qty + (item.qty * item?.shipping )))
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -((item.price * item.measurement) * item.qty + (item.qty * item?.shipping )) } });
+          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -((parseInt(item.price) * parseInt(item.measurement)) * item.qty + (parseInt(item.qty) * parseInt(item?.shipping ))) } });
         }
         // Update the inventory quantity.
         await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });
@@ -199,6 +233,13 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       // Update the transaction document with the list of transaction item IDs.
       transaction.items = transactionItemIds;
       await transaction.save();
+      createlogs(the_user,
+        {
+          transaction_id : transaction._id,
+          buyer_id,
+          type : transactionType,amount : transactionType === "sale" ? parseInt(sale_price + total_shipping) : -parseInt(price + total_shipping),
+          description 
+      })
     }
 
     res.status(201).json({ message: 'Transaction processed', transaction_id: transaction._id });
