@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Inventory from '../models/Inventory';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
+import User from '../models/User';
 
 const router = Router();
 router.use(authenticateJWT);
@@ -107,11 +108,12 @@ router.put('/:id', checkAccess("inventory","edit"),async (req: Request, res: Res
 // POST /api/products
 router.post('/',checkAccess("inventory","create"), async (req: Request, res: Response) => {
   try {
-    console.log("req.body",req.body)
-    const newProduct = new Inventory(req.body);
+    const the_user = await User.findById(req.user?.id)
+    const newProduct = new Inventory({...req.body,user_created_by_id: the_user?.created_by});
     await newProduct.save();
     res.status(201).json(newProduct);
   } catch (error) {
+    console.log("error",error)
     res.status(500).json({ error });
   }
 });

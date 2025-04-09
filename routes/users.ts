@@ -20,8 +20,15 @@ const saltRounds = 10;
 
 // GET /api/users - get all users
 router.get('/', checkAccess("config","read"), async (req: Request, res: Response) => {
+  console.log("user",req.user)
   try {
-    const users = await User.find();
+    const the_user = await User.findById(req.user?.id)
+    let users;
+    if(the_user.role === "superadmin") {
+      users = await User.find();
+    } else {
+      users = await User.find({created_by : req.user?.id});
+    }
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ error });
@@ -47,6 +54,7 @@ router.post('/',checkAccess("config","create"), async (req: Request, res: Respon
   try {
     // Validate request body against schema
     const { error, value } = userSchema.validate(req.body);
+    console.log("req.body",req.body)
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
@@ -138,16 +146,6 @@ router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Res
   }
 });
 
-// DELETE /api/users - soft delete a user
-router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Response) => {
-  try {
-    const { id } = req.body;
-    await User.findByIdAndUpdate(id, { deleted_at: new Date() });
-    res.status(200).json({ message: 'User deleted' });
-  } catch (error) {
-    res.status(500).json({ error });
-  }
-});
 
 
 router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
