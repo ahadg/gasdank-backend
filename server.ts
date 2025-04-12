@@ -42,7 +42,7 @@ dbConnect();
 
 // Health check endpoint
 app.get("/api/status", (req, res) => {
-    res.status(200).json({ "status": "ok v2" });
+    res.status(200).json({ "status": "ok v3" });
 });
 
 // Mount routes
