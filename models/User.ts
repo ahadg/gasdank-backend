@@ -31,7 +31,7 @@ const UserSchema: Schema = new Schema({
   inventory_value: {type : Number},
   balance : {type : Number},
   other_balance: {type : Object,default : {}},
-  cash_balance : {tpye : Number},
+  cash_balance : {type : Number},
   access : {type : Object},
   role : {type : String, default : "user"},
   created_at: { type: Date, default: Date.now },

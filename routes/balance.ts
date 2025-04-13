@@ -16,7 +16,7 @@ router.get('/', async (req: Request, res: Response) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     
     // Compute or retrieve the balance as needed. Here, returning 0 as a placeholder.
-    res.status(200).json({ balance: 0 });
+    res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ error });
   }
@@ -25,7 +25,8 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/balance/update
 router.post('/update', async (req: Request, res: Response) => {
   try {
-    const { userId, amount, method } = req.body;
+    const userId = req.user?.id
+    const { amount, method } = req.body;
 
     if (!userId || typeof amount !== 'number' || !['Cash', 'Crypto', 'EFT'].includes(method)) {
       return res.status(400).json({ message: 'Invalid request payload' });
@@ -33,12 +34,13 @@ router.post('/update', async (req: Request, res: Response) => {
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
-
+    
     if (method === 'Cash') {
-      user.balance = (user.balance || 0) + amount;
+      console.log("cash_balance",(Number(user.cash_balance) || 0) + Number(amount))
+      user.cash_balance = Number(Number(user.cash_balance) || 0) + Number(amount);
     } else {
       const currentOther = user.other_balance || {};
-      currentOther[method] = (currentOther[method] || 0) + amount;
+      currentOther[method] = (Number(currentOther[method]) || 0) + Number(amount);
       user.other_balance = currentOther;
     }
 
@@ -46,7 +48,7 @@ router.post('/update', async (req: Request, res: Response) => {
 
     res.status(200).json({
       message: `Updated ${method} balance successfully`,
-      balance: user.balance,
+      cash_balance: user.cash_balance,
       other_balance: user.other_balance
     });
   } catch (error) {
