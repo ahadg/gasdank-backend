@@ -11,7 +11,7 @@ import dbConnect from './utils/dbConnect';
 import redisClient from './utils/redisClient';
 
 // Load environment variables
-dotenv.config({ path: './.env' });
+dotenv.config();
 
 // Import route modules
 import authRoutes from './routes/auth';
