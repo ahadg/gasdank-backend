@@ -10,28 +10,35 @@ const router = Router();
 
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
-  const { identifier, pin } = req.body; // `email` can be username or email
+  const { identifier, pin } = req.body;
   console.log({ identifier, pin });
 
+  if (!identifier || !pin) {
+    return res.status(400).json({ message: 'Identifier and PIN are required' });
+  }
+
   try {
-    // Find user by identifier or username
+    const normalizedIdentifier = identifier.toLowerCase();
+
+    // Case-insensitive search for email or userName
     const user = await User.findOne({
-      $or: [{ email: identifier }, { userName: identifier }],
+      $or: [
+        { $expr: { $eq: [{ $toLower: '$email' }, normalizedIdentifier] } },
+        { $expr: { $eq: [{ $toLower: '$userName' }, normalizedIdentifier] } }
+      ]
     });
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Compare submitted password with the stored hashed password
     const isMatch = await bcrypt.compare(pin, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, email: user.email, access: user?.access },
+      { id: user._id, email: user.email, access: user.access },
       process.env.JWT_SECRET as string,
       { expiresIn: '297d' }
     );
