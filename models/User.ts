@@ -28,7 +28,7 @@ export interface IUser extends Document {
 }
 
 const UserSchema: Schema = new Schema({
-  created_by:  { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  created_by:  { type: Schema.Types.ObjectId, ref: 'User' },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   userName : {type : String, required : true},
@@ -49,12 +49,9 @@ const UserSchema: Schema = new Schema({
   stripeSubscriptionId: { type: String },
   subscriptionStatus: { 
     type: String,
-    enum: ['active', 'canceled', 'incomplete', 'incomplete_expired', 'past_due', 'unpaid', 'trialing'],
-    default: undefined
   },
   plan: {
     type: String,
-    enum: ['basic', 'pro', 'enterprise', undefined],
   },
   currentPeriodStart: { type: Date },
   currentPeriodEnd: { type: Date },

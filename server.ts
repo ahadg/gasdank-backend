@@ -18,6 +18,9 @@ import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
 //import dashboardRoutes from './routes/dashboard';
 import buyersRoutes from './routes/buyers';
+import stripesRoutes from './routes/stripe';
+import webhookRoutes from './routes/webhook';
+import systemsettingsRoutes from './routes/systemsetting';
 import activityRoutes from './routes/activity';
 import notificationRoutes from './routes/notifications';
 import expensesRoutes from './routes/expense';
@@ -28,6 +31,10 @@ import inventoryRoutes from './routes/inventory';
 import transactionRoutes from './routes/transaction';
 
 const app = express();
+
+
+
+app.use('/api/stripe/webhook', webhookRoutes);
 
 // Middleware
 app.use(cors()); // Enable CORS
@@ -55,8 +62,10 @@ app.use('/api/activity', activityRoutes);
 app.use('/api/notification', notificationRoutes);
 app.use('/api/expense', expensesRoutes);
 app.use('/api/sample', sampleRoutes);
+app.use('/api/systemsettings', systemsettingsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/balance', balanceRoutes);
+app.use('/api/stripe', stripesRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/transaction', transactionRoutes);
 

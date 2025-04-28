@@ -7,6 +7,7 @@ import stripe, { createStripeCustomer, createSubscription } from '../utils/strip
 import User from '../models/User';
 import Stripe from 'stripe';
 import { authenticateJWT } from '../middlewares/authMiddleware';
+import SystemSettings from '../models/SystemSettings';
 
 interface Access {
   id: string;
@@ -16,84 +17,90 @@ interface AuthenticatedRequest extends Request {
   user?: Access;
 }
 
-export const handleStripeWebhook = async (req: Request, res: Response) => {
-  const sig = req.headers['stripe-signature']!;
-  let event;
 
+
+export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err : any) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    console.log('req.body', req.body)
+
+    if (!req.body?.user_id) {
+      return res.status(401).json({ error: 'User not authenticated' })
+    }
+
+    const user = await User.findById(req.body.user_id)
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    if (!user.stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+      })
+      user.stripeCustomerId = customer.id
+      await user.save()
+    }
+
+    const { priceId, isUpgrade, plan } = req.body
+
+    if (!priceId) {
+      return res.status(400).json({ error: 'Missing price ID' })
+    }
+    console.log({isUpgrade,stripeSubscriptionId : user.stripeSubscriptionId})
+    if (isUpgrade && user.stripeSubscriptionId) {
+      // 🎯 User already has a subscription -> UPDATE it
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId)
+
+      const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: false,
+        proration_behavior: 'create_prorations',
+        items: [
+          {
+            id: subscription.items.data[0].id,
+            price: priceId,
+          },
+        ],
+      })
+
+      // 🎯 After updating subscription, update User's Plan locally
+      // const settings = await SystemSettings.findOne()
+      // const newPlan = settings?.plans.find((plan:any) => plan.stripePriceId === priceId)
+
+      // if (newPlan?.name) {
+      //   user.plan = newPlan.name
+      //   await user.save()
+      // }
+
+    } 
+    // 🎯 No active subscription -> create new Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      customer: user.stripeCustomerId,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      expand: ['subscription'],
+      metadata: {
+        plan_name: plan, // example
+      },
+      success_url: `${process.env.FRONTEND_URL}/auth/login?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+    })
+
+    return res.json({ url: session.url })
+
+  } catch (error: any) {
+    console.error('Checkout Session Error:', error)
+    return res.status(500).json({ error: error.message })
   }
-
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      await handleCheckoutCompleted(session);
-      break;
-    case 'invoice.payment_succeeded':
-      const invoice = event.data.object;
-      //await handlePaymentSucceeded(invoice);
-      break;
-    case 'customer.subscription.updated':
-      const subscription = event.data.object;
-      //await handleSubscriptionUpdate(subscription);
-      break;
-  }
-
-  res.json({ received: true });
-};
-
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  const user = await User.findOne({ stripeCustomerId: session.customer });
-  if (!user) return;
-
-  const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
-  const subscriptionData = subscription as unknown as { current_period_start: number; current_period_end: number };
-
-  user.subscriptionStatus = subscription.status;
-  user.stripeSubscriptionId = subscription.id;
-  user.currentPeriodStart = new Date(subscriptionData.current_period_start * 1000);
-  user.currentPeriodEnd = new Date(subscriptionData.current_period_end * 1000);
-  user.plan = subscription.items.data[0].price.nickname?.toLowerCase();
-  
-  await user.save();
 }
 
-export const createSubscriptionHandler = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!req.user?.id) {
-      return res.status(401).json({ error: 'User not authenticated' });
-    }
-    
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    if (!user.stripeCustomerId) {
-      const customer = await createStripeCustomer(user);
-      user.stripeCustomerId = customer.id;
-      await user.save();
-    }
+//router.post('/create-subscription', createSubscriptionHandler);
+router.post('/create-checkout-session', createCheckoutSessionHandler);
 
-    const session = await createSubscription(
-      user.stripeCustomerId,
-      process.env.STRIPE_PRICE_ID!
-    );
-
-    res.json({ url: session.url });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// Webhook needs raw body
-router.post('/webhook', express.raw({type: 'application/json'}), handleStripeWebhook);
-router.post('/create-subscription', authenticateJWT, createSubscriptionHandler);
 
 export default router;

@@ -12,24 +12,64 @@ interface Access {
   id : string;
 }
 
-// Middleware factory: returns a middleware function
 const checkAccess = (moduleKey: string, permission: string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
-    // Assume req.user is already set by your auth middleware
-    const user = await User.findById(req?.user?.id)
-    //req.user as Access | undefined;
-    //console.log("user.access",user.access)
-    if (!user || !user.access) {
-      console.log("error","User not authenticated or access data missing.")
-      return res.status(401).json({ error: 'User not authenticated or access data missing.' });
+    try {
+      const user = await User.findById(req?.user?.id)
+
+      if (!user || !user.access) {
+        console.log('error', 'User not authenticated or access data missing.')
+        return res.status(401).json({ error: 'User not authenticated or access data missing.' })
+      }
+
+      // Skip subscription check for superadmin or user roles
+      if (user.role === 'superadmin' || user.role === 'user') {
+        console.log('info', `Bypassed subscription check for role: ${user.role}`)
+      } else {
+        // Check subscription status
+        const validSubscriptionStatuses = ['active', 'trialing']
+        const isSubscriptionValid = validSubscriptionStatuses.includes(user.subscriptionStatus || '')
+
+        // Check current period end
+        const now = new Date()
+        const currentPeriodEnd = user.currentPeriodEnd ? new Date(user.currentPeriodEnd) : null
+        const isCurrentPeriodActive = currentPeriodEnd ? currentPeriodEnd > now : false
+
+        if (!isSubscriptionValid || !isCurrentPeriodActive) {
+          console.log('error', 'Subscription inactive or expired.')
+          return res.status(403).json({ error: 'Subscription expired or inactive. Please update your plan.' })
+        }
+      }
+
+      // Check access permissions
+      if (user.access[moduleKey] && user.access[moduleKey][permission]) {
+        return next()
+      }
+
+      console.log('error', 'Access Denied. Missing required permission.')
+      return res.status(403).json({ error: 'Access Denied. Missing required permission.' })
+    } catch (err) {
+      console.error('checkAccess error:', err)
+      return res.status(500).json({ error: 'Internal server error' })
     }
-    // Check if user has permission for the given module/key
-    if (user.access[moduleKey] && user.access[moduleKey][permission]) {
-      return next();
+  }
+}
+
+
+export const isSuperAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await User.findById(req?.user?.id);
+    //console.log("user",user)
+    if (!user || user.role !== 'superadmin') {
+      console.log("error", "Access denied. SuperAdmin only.");
+      return res.status(403).json({ error: 'Access denied. SuperAdmin only.' });
     }
-    console.log("error","Access Denied.")
-    return res.status(500).json({ error: 'Access Denied.' });
-  };
+
+    next();
+  } catch (err) {
+    console.log("error", "Server error during SuperAdmin check.");
+    return res.status(500).json({ error: 'Server error.' });
+  }
 };
 
 export default checkAccess;

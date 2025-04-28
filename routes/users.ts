@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { authenticateJWT } from '../middlewares/authMiddleware';
+import { authenticateJWT, AuthRequest } from '../middlewares/authMiddleware';
 import User from '../models/User';
-import userSchema from '../schemas/user';
+import userSchema,{userSignupSchema} from '../schemas/user';
 import bcrypt from 'bcrypt';
 import Transaction from '../models/Transaction';
 import Inventory from '../models/Inventory';
@@ -9,17 +9,16 @@ import Buyer from '../models/Buyer';
 import mongoose from 'mongoose';
 import checkAccess from '../middlewares/accessMiddleware';
 import { createActivity } from './activity';
+import SystemSettings from '../models/SystemSettings';
+import { adminDefaultAccess } from '../utils/helpers';
 
 const router = Router();
-
-// Optionally protect all /api/users endpoints
-router.use(authenticateJWT);
 
 // Number of salt rounds for bcrypt
 const saltRounds = 10;
 
 // GET /api/users - get all users
-router.get('/', checkAccess("config","read"), async (req: Request, res: Response) => {
+router.get('/',authenticateJWT, checkAccess("config","read"), async (req: Request, res: Response) => {
   console.log("user",req.user)
   try {
     const the_user = await User.findById(req.user?.id)
@@ -35,8 +34,23 @@ router.get('/', checkAccess("config","read"), async (req: Request, res: Response
   }
 });
 
+// GET /api/users/me - get a specific user by ID
+router.get('/me', authenticateJWT, async (req: any, res: Response) => { 
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({user});
+  } catch (error) {
+    console.log("error",error)
+    res.status(500).json({ error });
+  }
+});
+
 // GET /api/users/:id - get a specific user by ID
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id',authenticateJWT,checkAccess("config","read"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -49,8 +63,10 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+
+
 // POST /api/users - create a new user
-router.post('/',checkAccess("config","create"), async (req: Request, res: Response) => {
+router.post('/',authenticateJWT, checkAccess("config","create"), async (req: Request, res: Response) => {
   try {
     // Validate request body against schema
     const { error, value } = userSchema.validate(req.body);
@@ -90,8 +106,84 @@ router.post('/',checkAccess("config","create"), async (req: Request, res: Respon
   }
 });
 
+// Public Signup: No need to checkAccess middleware here
+router.post('/signup', async (req: Request, res: Response) => {
+  try {
+    console.log("req.body",req.body)
+    // Validate request body
+    const { error, value } = userSignupSchema.validate(req.body)
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message })
+    }
+
+    console.log('Signup req.body', value)
+
+    // Check if email or username already exists
+    const existingUser = await User.findOne({
+      $or: [{ email: value.email }, { userName: value.userName }],
+    })
+
+    if (existingUser) {
+      return res.status(409).json({ error: 'Email or Username already exists' })
+    }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(value.password, 10)
+    value.password = hashedPassword
+    value.inventory_value = 0
+    value.balance = 0
+    value.other_balance = {}
+    value.cash_balance = 0
+    value.access = adminDefaultAccess
+    value.role = 'admin'
+    value.created_at = new Date()
+    value.updated_at = new Date()
+
+    // Validate selected plan
+    const systemSettings = await SystemSettings.findOne()
+    const validPlan = systemSettings?.plans?.find(
+      (p : any) => p.name.toLowerCase() === value.plan.toLowerCase()
+    )
+    if (!validPlan) {
+      return res.status(400).json({ error: 'Selected plan is invalid' })
+    }
+
+    value.plan = validPlan.name
+
+    // Create and save new user
+    const newUser = new User(value)
+    await newUser.save()
+
+    // Log activity (optional for signup)
+    createActivity({
+      user_id: newUser._id,
+      user_created_by: null,
+      action: 'create',
+      resource_type: 'user',
+      page: 'signup',
+      type: 'user_created',
+      description: `User ${value.email} signed up`,
+    })
+
+    res.status(201).json({
+      message: 'Signup successful',
+      newUser,
+      user: {
+        id: newUser._id,
+        email: newUser.email,
+        userName: newUser.userName,
+        plan: newUser.plan,
+      },
+    })
+  } catch (error: any) {
+    console.error('Signup Error:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+
 // PATCH /api/users/:id - update a user (with password hashing if password is provided)
-router.patch('/:id',checkAccess("config","read"), async (req: Request, res: Response) => {
+router.patch('/:id',authenticateJWT,checkAccess("config","read"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -115,7 +207,7 @@ router.patch('/:id',checkAccess("config","read"), async (req: Request, res: Resp
 
 // PUT /api/users - update a user (alternative update route without password logic)
 // You can choose to remove this route if you prefer using the PATCH route above.
-router.put('/', async (req: Request, res: Response) => {
+router.put('/',authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { id, ...updateData } = req.body;
     const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
@@ -125,7 +217,7 @@ router.put('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:user_id', async (req: Request, res: Response) => {
+router.put('/:user_id',authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
     const updatedUser = await User.findByIdAndUpdate(user_id, req.body, { new: true });
@@ -136,7 +228,7 @@ router.put('/:user_id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/users - soft delete a user
-router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Response) => {
+router.delete('/', authenticateJWT, checkAccess("config","delete") ,async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     await User.findByIdAndUpdate(id, { deleted_at: new Date() });
@@ -148,7 +240,8 @@ router.delete('/', checkAccess("config","delete") ,async (req: Request, res: Res
 
 
 
-router.get('/stats/:user_id', checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
+
+router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
     if (!user_id) {
