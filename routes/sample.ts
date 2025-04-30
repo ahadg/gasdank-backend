@@ -22,7 +22,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const samples = await Sample.find({ user_id });
+    const samples = await Sample.find({ user_id, status : "holding" });
     res.status(200).json(samples);
   } catch (err: any) {
     console.error('Error fetching samples:', err);

@@ -12,7 +12,7 @@ export interface IExpense extends Document {
 
 const ExpenseSchema: Schema = new Schema({
     user_id:   { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    user_created_by_id:   { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    user_created_by_id:   { type: Schema.Types.ObjectId, ref: 'User' },
     category_id :  { type: Schema.Types.ObjectId, ref: 'Category', required: true },
     amount : { type: Number, required: true },
     description:  { type: String, required: true },
