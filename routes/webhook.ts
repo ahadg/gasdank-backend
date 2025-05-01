@@ -57,28 +57,36 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
     if (!user) return;
   
     const subscription = await stripe.subscriptions.retrieve(session.subscription as string) as Stripe.Subscription;
-    
-    const startDate = new Date(subscription.start_date * 1000); // Stripe timestamps are in seconds
-    const estimatedEndDate = new Date(startDate);
-    estimatedEndDate.setMonth(estimatedEndDate.getMonth() + 1); // Add 1 month manually
+    console.log("subscription",subscription)
+    const startDate = new Date(subscription?.items?.data[0]?.current_period_start * 1000); // when the trial starts
+    const currentPeriodEnd = new Date(subscription?.items?.data[0]?.current_period_end * 1000); // end of trial or billing cycle
+    console.log("subscription_items",subscription?.items?.data)
+    // Determine if trial is active
+    const trialEndDate = subscription.trial_end 
+      ? new Date(subscription.trial_end * 1000)
+      : null;
   
     user.subscriptionStatus = subscription.status;
     user.stripeSubscriptionId = subscription.id;
     user.currentPeriodStart = startDate;
-    user.currentPeriodEnd = estimatedEndDate;
+    user.currentPeriodEnd = currentPeriodEnd;
+  
+    if (trialEndDate) {
+      user.trialEnd = trialEndDate;
+    } 
   
     // 🧠 Plan Name from session metadata
     const planFromMetadata = session.metadata?.plan_name;
     if (planFromMetadata) {
       user.plan = planFromMetadata.toLowerCase();
     } else {
-      // fallback if metadata missing (still keep safety)
       console.warn('No plan_name in metadata, falling back to Stripe price nickname');
       user.plan = subscription.items.data[0]?.price.nickname?.toLowerCase() ?? 'default-plan';
     }
   
     await user.save();
   }
+  
   
 
 

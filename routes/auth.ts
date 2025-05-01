@@ -37,6 +37,10 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // if(!user.plan && user.role !== 'superadmin') {
+    //   return res.status(401).json({ message: 'Please subscribe to a plan first' });
+    // }
+
     const token = jwt.sign(
       { id: user._id, email: user.email, access: user.access },
       process.env.JWT_SECRET as string,

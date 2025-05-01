@@ -17,6 +17,36 @@ interface AuthenticatedRequest extends Request {
   user?: Access;
 }
 
+// Cancel subscription route
+router.post('/cancel-subscription', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.body.user_id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user || !user.stripeSubscriptionId) {
+      return res.status(404).json({ error: 'Active subscription not found' });
+    }
+
+    // Cancel the subscription immediately or at period end
+    const canceledSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    return res.json({
+      status: 'success',
+      message: 'Subscription will be canceled at the end of the current period.',
+      subscription: canceledSubscription,
+    });
+  } catch (error: any) {
+    console.error('Cancel Subscription Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 
 
 export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, res: Response) => {
@@ -51,7 +81,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
       // 🎯 User already has a subscription -> UPDATE it
       const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId)
 
-      const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      await stripe.subscriptions.update(user.stripeSubscriptionId, {
         cancel_at_period_end: false,
         proration_behavior: 'create_prorations',
         items: [
@@ -61,18 +91,11 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
           },
         ],
       })
-
-      // 🎯 After updating subscription, update User's Plan locally
-      // const settings = await SystemSettings.findOne()
-      // const newPlan = settings?.plans.find((plan:any) => plan.stripePriceId === priceId)
-
-      // if (newPlan?.name) {
-      //   user.plan = newPlan.name
-      //   await user.save()
-      // }
-
+      user.plan = plan
+      await user.save();
+      return res.json({ status: "success" })
     } 
-    // 🎯 No active subscription -> create new Checkout Session
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -83,14 +106,19 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
           quantity: 1,
         },
       ],
-      expand: ['subscription'],
+      subscription_data: {
+        trial_period_days: 60,
+        metadata: {
+          plan_name: plan,
+        },
+      },
       metadata: {
-        plan_name: plan, // example
+        plan_name: plan,
       },
       success_url: `${process.env.FRONTEND_URL}/auth/login?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/cancel`,
     })
-
+    
     return res.json({ url: session.url })
 
   } catch (error: any) {
