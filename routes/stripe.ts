@@ -37,6 +37,9 @@ router.post('/cancel-subscription', authenticateJWT, async (req: AuthenticatedRe
       cancel_at_period_end: true,
     });
 
+    user.subscriptionStatus = 'cancelled'
+    user.save()
+
     return res.json({
       status: 'success',
       message: 'Subscription will be canceled at the end of the current period.',
@@ -68,7 +71,15 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
         name: `${user.firstName} ${user.lastName}`,
       })
       user.stripeCustomerId = customer.id
+      const currentTrialEnd = new Date(); // Original trial end date
+      currentTrialEnd.setDate(currentTrialEnd.getDate() + 60); // Add 60 days
+      
+      user.trialEnd = currentTrialEnd.toISOString();     
+      user.subscriptionStatus = 'trialing';
+      user.currentPeriodEnd = currentTrialEnd.toISOString();
+      user.currentPeriodStart = new Date().toISOString();
       await user.save()
+      return res.json({ status: "success" })
     }
 
     const { priceId, isUpgrade, plan } = req.body
@@ -107,7 +118,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
         },
       ],
       subscription_data: {
-        trial_period_days: 60,
+       // trial_period_days: 60,
         metadata: {
           plan_name: plan,
         },
