@@ -7,8 +7,16 @@ const router = Router();
 router.use(authenticateJWT);
 
 // POST /api/buyers - Create a new buyer
-router.post('/',checkAccess("wholesale","create"), async (req: Request, res: Response) => {
+router.post('/', checkAccess("wholesale", "create"), async (req: Request, res: Response) => {
   try {
+    const { email } = req.body;
+
+    // Check if a buyer with the same email already exists
+    const existingBuyer = await Buyer.findOne({ email });
+    if (existingBuyer) {
+      return res.status(400).json({ error: 'A buyer with this email already exists.' });
+    }
+
     const newBuyer = new Buyer(req.body);
     await newBuyer.save();
     res.status(201).json(newBuyer);

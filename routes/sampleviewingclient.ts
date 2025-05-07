@@ -4,7 +4,6 @@ import { authenticateJWT } from '../middlewares/authMiddleware'
 import SampleViewingClient from '../models/SampleViewingClients'
 
 const router = Router()
-
 router.use(authenticateJWT)
 
 // GET all sessions for a worker or user
@@ -16,7 +15,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const sessions = await SampleViewingClient.find({ createdBy })
+    const sessions = await SampleViewingClient.find({ createdBy }).populate("buyer_id")
     res.status(200).json(sessions)
   } catch (err: any) {
     console.error('Error fetching sessions:', err)
@@ -27,20 +26,22 @@ router.get('/', async (req: Request, res: Response) => {
 // POST create a new viewing session
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { clientName, userId, items, notes } = req.body
-    const createdBy = req.user?.id // must be set by JWT middleware
+    const { buyer_id, user_id, items, notes } = req.body
+    const createdBy = req.user?.id
 
-    if (!clientName || !userId || !Array.isArray(items) || items.length === 0) {
+    if (!buyer_id || !user_id || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
-    // Attach default status to each item
-    const itemsWithStatus = items.map((item: any) => ({ ...item, status: 'pending' }))
+    const itemsWithStatus = items.map((item: any) => ({
+      ...item,
+      status: 'pending',
+    }))
 
     const newSession = new SampleViewingClient({
-      clientName,
+      buyer_id,
       createdBy,
-      userId,
+      user_id,
       items: itemsWithStatus,
       viewingStatus: 'pending',
       notes,
@@ -67,7 +68,6 @@ router.patch('/:sessionId/items', async (req: Request, res: Response) => {
     const session = await SampleViewingClient.findById(sessionId)
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
-    // Validate and update statuses
     const updatedItems = session.items.map((item: any) => {
       const updated = items.find((i: any) => i.productId.toString() === item.productId.toString())
       return updated ? { ...item.toObject(), status: updated.status } : item

@@ -1,9 +1,9 @@
 import mongoose, { Schema, Document } from 'mongoose'
 
 export interface ISampleViewingClient extends Document {
-  clientName: string
+  buyer_id: mongoose.Types.ObjectId
   createdBy: mongoose.Types.ObjectId
-  userId: mongoose.Types.ObjectId
+  user_id: mongoose.Types.ObjectId
   items: {
     productId: mongoose.Types.ObjectId
     name: string
@@ -18,9 +18,9 @@ export interface ISampleViewingClient extends Document {
 }
 
 const SampleViewingClientSchema = new Schema({
-  clientName: { type: String, required: true },
+  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   items: [
     {
       productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
@@ -37,4 +37,3 @@ const SampleViewingClientSchema = new Schema({
 })
 
 export default mongoose.models.SampleViewingClient || mongoose.model<ISampleViewingClient>('SampleViewingClient', SampleViewingClientSchema)
-
