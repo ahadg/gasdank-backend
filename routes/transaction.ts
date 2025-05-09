@@ -252,24 +252,34 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
 router.get('/history/:buyer_id/:user_id', checkAccess("wholesale", "read"), async (req: Request, res: Response) => {
   try {
     const { buyer_id, user_id } = req.params;
-
-    // Get the start and end of today (12:00 AM - 11:59 PM)
-    const todayStart = moment().startOf('day').toDate(); // Today at 12:00 AM
-    const todayEnd = moment().endOf('day').toDate(); // Today at 11:59:59 PM
-
+    const { startDateTime, endDateTime } = req.query;
+    
+    // Default to today if no date range is provided
+    let dateStart, dateEnd;
+    
+    if (startDateTime && endDateTime) {
+      // Parse dates from query parameters
+      dateStart = moment(startDateTime as string).toDate();
+      dateEnd = moment(endDateTime as string).toDate();
+    } else {
+      // Default to today (12:00 AM - 11:59 PM)
+      dateStart = moment().startOf('day').toDate();
+      dateEnd = moment().endOf('day').toDate();
+    }
+    
     // Build a query condition based on provided parameters
     const query: any = {
-      created_at: { $gte: todayStart, $lt: todayEnd } // Fetch today's transactions only
+      created_at: { $gte: dateStart, $lt: dateEnd }
     };
-
-
+    
     if (buyer_id) {
       query.buyer_id = buyer_id;
     }
+    
     if (user_id) {
       query.user_id = user_id;
     }
-
+    
     // Fetch transactions that match the query
     const transactions = await Transaction.find(query)
       .populate({
@@ -286,8 +296,9 @@ router.get('/history/:buyer_id/:user_id', checkAccess("wholesale", "read"), asyn
       .populate({
         path: 'transactionpayment_id',
         model: 'TransactionPayment'
-      });
-
+      })
+      .sort({ created_at: 1 }); // Sort by date ascending
+    
     res.status(200).json(transactions);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
