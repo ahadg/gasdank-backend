@@ -1,9 +1,29 @@
 import { Router, Request, Response } from 'express';
 import User from '../models/User';
 import { authenticateJWT } from '../middlewares/authMiddleware';
+import Buyer from '../models/Buyer';
 
 const router = Router();
 router.use(authenticateJWT);
+
+
+// GET /api/balance
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const buyer = await Buyer.findOne({ user_id: req?.user?.id })
+      .select('email firstName lastName phone currentBalance');
+
+    if (!buyer) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json(buyer);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch buyer balance', details: error });
+  }
+});
+
+
 
 // GET /api/balance?userId=...
 router.get('/', async (req: Request, res: Response) => {

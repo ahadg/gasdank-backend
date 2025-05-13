@@ -2,13 +2,26 @@ import express, { Request, Response } from 'express';
 import Expense, { IExpense } from '../models/Expense'; // adjust path if needed
 import mongoose from 'mongoose';
 import { createActivity } from './activity';
+import { authenticateJWT } from '../middlewares/authMiddleware';
 
 const router = express.Router();
+router.use(authenticateJWT);
 
 // GET expense by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ error: 'Expense not found' });
+    res.status(200).json(expense);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch expense', details: err });
+  }
+});
+
+// GET expenses 
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const expense = await Expense.find({user_id : req.user?.id});
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     res.status(200).json(expense);
   } catch (err) {
