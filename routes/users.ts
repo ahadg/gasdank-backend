@@ -12,6 +12,10 @@ import { createActivity } from './activity';
 import SystemSettings from '../models/SystemSettings';
 import { adminDefaultAccess } from '../utils/helpers';
 
+import { setUserResetToken, verifyTokenAndUpdatePassword } from '../utils/passwordReset';
+import { sendPasswordEmail } from '../utils/sendEmail';
+const FRONTEND_URL = process.env.FRONTEND_URL
+
 const router = Router();
 
 // Number of salt rounds for bcrypt
@@ -238,7 +242,44 @@ router.delete('/', authenticateJWT, checkAccess("config","delete") ,async (req: 
   }
 });
 
+/** 1. Request reset link */
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
 
+    const { user, rawToken } = await setUserResetToken(email);
+    if (!user) {
+      // Don’t reveal user existence
+      return res.status(200).json({ message: 'If the email exists, a reset link was sent.' });
+    }
+
+    const resetLink = `${FRONTEND_URL}/auth/reset-password?token=${rawToken}`;
+    console.log("resetLink***",resetLink)
+    await sendPasswordEmail(email, resetLink);
+
+    res.status(200).json({ message: 'If the email exists, a reset link was sent.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** 2. Actually reset the password */
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password)
+      return res.status(400).json({ error: 'Token and new password are required' });
+
+    const user = await verifyTokenAndUpdatePassword(token, password);
+    if (!user) return res.status(400).json({ error: 'Token is invalid or expired' });
+
+    // (Optional) auto‑login: issue new JWT here
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), async (req: Request, res: Response) => {

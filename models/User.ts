@@ -25,6 +25,8 @@ export interface IUser extends Document {
   currentPeriodEnd?: Date;
   trialEnd?: Date;
   paymentMethodType?: string;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: string;
 }
 
 const UserSchema: Schema = new Schema({
@@ -57,6 +59,8 @@ const UserSchema: Schema = new Schema({
   currentPeriodEnd: { type: Date },
   trialEnd: { type: Date },
   paymentMethodType: { type: String },
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date },
 });
 
 export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
