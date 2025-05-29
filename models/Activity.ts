@@ -40,7 +40,7 @@ const ActivitySchema: Schema = new Schema({
   metadata: { type: Object }, // flexible field for extra context (e.g., before/after changes)
 
   created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now }
+  updated_at: { type: Date, default: Date.now },
 });
 
 export default mongoose.models.Activity || mongoose.model<IActivity>('Activity', ActivitySchema);
