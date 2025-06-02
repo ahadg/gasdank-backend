@@ -30,6 +30,8 @@ import categoriesRoutes from './routes/categories';
 import balanceRoutes from './routes/balance';
 import inventoryRoutes from './routes/inventory';
 import transactionRoutes from './routes/transaction';
+import dashboardRoutes from './routes/dashboard';
+
 
 const app = express();
 
@@ -70,6 +72,7 @@ app.use('/api/balance', balanceRoutes);
 app.use('/api/stripe', stripesRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/transaction', transactionRoutes);
+app.use("/api/dashboard", dashboardRoutes)
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
