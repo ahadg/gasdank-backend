@@ -113,7 +113,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
   //   // For payment transactions:
   //   payment_method?: string
   // }
-  const { user_id, buyer_id, items, payment, price,total_shipping, payment_direction, sale_price, profit, notes, type, payment_method } = req.body;
+  const { user_id,worker_id, buyer_id, items, payment, price,total_shipping, payment_direction, sale_price, profit, notes, type, payment_method } = req.body;
   console.log("req.body", req.body);
   // Default transaction type is "sale"
   const transactionType: string = type || "sale";
@@ -142,6 +142,7 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
     const transaction = new Transaction({
       user_id,
       buyer_id,
+      worker_id,
       type: transactionType,
       notes,
       payment_method,

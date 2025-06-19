@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose'
 
 export interface ISampleViewingClient extends Document {
   buyer_id: mongoose.Types.ObjectId
-  createdBy: mongoose.Types.ObjectId
+  user_created_by: mongoose.Types.ObjectId
   user_id: mongoose.Types.ObjectId
   items: {
     productId: mongoose.Types.ObjectId
@@ -19,7 +19,7 @@ export interface ISampleViewingClient extends Document {
 
 const SampleViewingClientSchema = new Schema({
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  user_created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   items: [
     {

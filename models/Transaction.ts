@@ -34,6 +34,7 @@ export interface IPrevValue {
 export interface ITransaction extends Document {
   user_id: mongoose.Types.ObjectId;
   buyer_id: mongoose.Types.ObjectId;
+  worker_id: mongoose.Types.ObjectId;
   payment: number;
   status: number;
   datePaid?: Date;
@@ -85,6 +86,7 @@ const PrevValueSchema = new Schema({
 const TransactionSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
+  worker_id: { type: Schema.Types.ObjectId, ref: 'User'},
   transactionpayment_id: { type: Schema.Types.ObjectId, ref: 'TransactionPayment' },
   payment_direction: { type: String },
   payment_method: { type: String },

@@ -6,6 +6,8 @@ import Sample from '../models/Sample';
 import Inventory from '../models/Inventory';
 import mongoose from 'mongoose';
 import User from '../models/User';
+import Buyer from '../models/Buyer';
+import { twilioClient } from './notifications';
 
 
 const router = Router();
@@ -109,13 +111,36 @@ router.post('/:id/accept', async (req, res) => {
 router.post('/:id/return', async (req, res) => {
   const sample = await Sample.findById(req.params.id)
   if (!sample) return res.status(404).json({ error: 'Sample not found' })
-
-  // Trigger SMS (Twilio or other)
-  // sendSMS(sample.sender_phone, `Hi! Your sample "${sample.name}" was returned.`)
-
+   
+  const buyer = await Buyer.findById(sample?.buyer_id)
+  
+  // Create detailed product list for SMS
+  const productList = sample.products.map((product: any) => {
+    return `${product.name} (${product.qty} ${product.unit})`
+  }).join(', ')
+  
+  // Calculate total quantity and items
+  const totalItems = sample.products.length
+  const totalQty = sample.products.reduce((sum: number, product: any) => sum + product.qty, 0)
+  
+  // Create comprehensive SMS message
+  let smsBody = `Hi! Your sample order has been returned.\n\nProducts: ${productList}`
+  
+  if (totalItems > 1) {
+    smsBody += `\n\nTotal: ${totalItems} items (${totalQty} units)`
+  }
+  
+  smsBody += `\n\nPlease contact us if you have any questions.`
+  
+  const smsResult = await twilioClient.messages.create({
+    body: smsBody,
+    from: process.env.TWILIO_PHONE_NUMBER,
+    to: buyer.phone
+  });
+   
   sample.status = 'returned'
   await sample.save()
-
+   
   res.status(200).json({ message: 'Returned' })
 })
   

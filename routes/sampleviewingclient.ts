@@ -8,14 +8,32 @@ router.use(authenticateJWT)
 
 // GET all sessions for a worker or user
 router.get('/', async (req: Request, res: Response) => {
-  const { createdBy } = req.query
-
-  if (!createdBy || !mongoose.Types.ObjectId.isValid(createdBy as string)) {
-    return res.status(400).json({ error: 'Invalid or missing createdBy ID' })
+  const { user_created_by } = req.query
+  console.log("user_created_by",user_created_by)
+  if (!user_created_by || !mongoose.Types.ObjectId.isValid(user_created_by as string)) {
+    return res.status(400).json({ error: 'Invalid or missing user_created_by ID' })
   }
 
   try {
-    const sessions = await SampleViewingClient.find({ createdBy }).populate("buyer_id")
+    const sessions = await SampleViewingClient.find({ user_created_by }).populate("buyer_id")
+    res.status(200).json(sessions)
+  } catch (err: any) {
+    console.error('Error fetching sessions:', err)
+    res.status(500).json({ error: 'Failed to fetch sessions', details: err.message })
+  }
+})
+
+// GET all sessions for a worker or user
+router.get('/worker', async (req: Request, res: Response) => {
+  const { user_id } = req.query
+  console.log("_worker_user_id",user_id)
+  if (!user_id || !mongoose.Types.ObjectId.isValid(user_id as string)) {
+    return res.status(400).json({ error: 'Invalid or missing user_created_by ID' })
+  }
+
+  try {
+    const sessions = await SampleViewingClient.find({ user_id }).populate("buyer_id")
+    console.log("sessions",sessions)
     res.status(200).json(sessions)
   } catch (err: any) {
     console.error('Error fetching sessions:', err)
@@ -27,8 +45,8 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { buyer_id, user_id, items, notes } = req.body
-    const createdBy = req.user?.id
-
+    const user_created_by = req.user?.id
+    console.log("req.body",req.body)
     if (!buyer_id || !user_id || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Missing required fields' })
     }
@@ -40,7 +58,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     const newSession = new SampleViewingClient({
       buyer_id,
-      createdBy,
+      user_created_by,
       user_id,
       items: itemsWithStatus,
       viewingStatus: 'pending',
