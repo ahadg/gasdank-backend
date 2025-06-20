@@ -3,11 +3,14 @@ import { authenticateJWT } from "../middlewares/authMiddleware";
 import checkAccess from "../middlewares/accessMiddleware";
 import Notification from "../models/notification";
 import Sample from '../models/Sample';
-import Inventory from '../models/Inventory';
+import Inventory, { generateProductId } from '../models/Inventory';
 import mongoose from 'mongoose';
 import User from '../models/User';
 import Buyer from '../models/Buyer';
 import { twilioClient } from './notifications';
+import { createlogs, formatCurrency } from './transaction';
+import TransactionItem from '../models/TransactionItem';
+import Transaction from '../models/Transaction';
 
 
 const router = Router();
@@ -41,8 +44,8 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { user_id, buyer_id, status = 'holding', products } = req.body;
-
+    const { user_id, buyer_id, status = 'holding', products,totalShippingCost } = req.body;
+    console.log("req.body;",req.body)
     if (!mongoose.Types.ObjectId.isValid(user_id) || !mongoose.Types.ObjectId.isValid(buyer_id)) {
       return res.status(400).json({ error: 'Invalid user_id or buyer_id' });
     }
@@ -51,26 +54,27 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Products must be a non-empty array' });
     }
 
-    for (const product of products) {
-      if (
-        !product.name ||
-        !product.category_id ||
-        !mongoose.Types.ObjectId.isValid(product.category_id) ||
-        typeof product.qty !== 'number' ||
-        typeof product.unit !== 'string' ||
-        typeof product.measurement !== 'number' ||
-        typeof product.price !== 'number' ||
-        typeof product.shippingCost !== 'number'
-      ) {
-        return res.status(400).json({ error: 'Invalid product details' });
-      }
-    }
+    // for (const product of products) {
+    //   if (
+    //     !product.name ||
+    //     !product.category_id ||
+    //     !mongoose.Types.ObjectId.isValid(product.category_id) ||
+    //     typeof product.qty !== 'number' ||
+    //     typeof product.unit !== 'string' ||
+    //     typeof product.measurement !== 'number' ||
+    //     typeof product.price !== 'number' ||
+    //     typeof product.shippingCost !== 'number'
+    //   ) {
+    //     return res.status(400).json({ error: 'Invalid product details' });
+    //   }
+    // }
 
     const newSample = new Sample({
       user_id,
       buyer_id,
       status,
-      products
+      products,
+      totalShippingCost
     });
 
     await newSample.save();
@@ -83,28 +87,147 @@ router.post('/', async (req: Request, res: Response) => {
 
 
 router.post('/:id/accept', async (req, res) => {
-  const sample = await Sample.findById(req.params.id);
-  const user = await User.findById(sample?.user_id);
-  if (!sample) return res.status(404).json({ error: 'Sample not found' });
+  try {
+    const sample = await Sample.findById(req.params.id);
+    const user = await User.findById(sample?.user_id);
+    
+    if (!sample) {
+      return res.status(404).json({ error: 'Sample not found' });
+    }
+    
+    if (sample.status === 'accepted') {
+      return res.status(400).json({ error: 'Sample already accepted' });
+    }
 
-  for (const product of sample.products) {
-    await Inventory.create({
-      name: product.name,
-      qty: product.qty,
-      unit: product.unit,
-      user_id: sample.user_id,
-      user_created_by_id: user?.created_by,
+    // ============================================================================
+    // CREATE TRANSACTION FOR INVENTORY ADDITION
+    // ============================================================================
+    const transaction = new Transaction({
+      user_id: (user?.role == "admin" || user?.role == "superadmin") ? sample.user_id : sample.created_by ,
       buyer_id: sample.buyer_id,
-      category: product.category_id,
-      price: product.price,
-      shippingCost: product.shippingCost
+      worker_id: user?.role == "user"  ? sample.user_id : null, // fallback to user_id if no worker_id
+      type: "inventory_addition",
+      notes: `Inventory addition from accepted sample`,
+      payment_method: "Credit", // or whatever default you prefer
+      price: 0, // will be calculated from products
+      payment_direction: "given", // since we're adding to buyer's debt
+      total_shipping: 0,
+      profit: 0,
+      items: [] // start with empty items array
     });
+
+    //await transaction.save();
+    console.log("step _ 1")
+    // ============================================================================
+    // PROCESS SAMPLE PRODUCTS AND CREATE INVENTORY
+    // ============================================================================
+    const transactionItemIds = [];
+    let totalPrice = 0;
+    let totalShipping = 0;
+    let description = '';
+
+    for (const product of sample.products) {
+      const shipping_per_unit = product.shippingCost
+      // console.log({
+      //   shippingCost: product.shippingCost,
+      //   shippingPerUnit: product?.shippingPerUnit
+      // })
+      console.log("shipping_per_unit",shipping_per_unit)
+      const productTotalPrice = product.price * product.qty;
+      let productTotalShipping = Number(product.shippingCost).toFixed(2);
+      
+      // Create inventory item
+      const inventoryItem = await Inventory.create({
+        name: product.name,
+        qty: product.qty,
+        unit: product.unit,
+        user_id: sample.user_id,
+        user_created_by_id: user?.created_by,
+        buyer_id: sample.buyer_id,
+        category: product.category_id,
+        price: product.price,
+        shippingCost: Number(shipping_per_unit).toFixed(2),
+        product_id: generateProductId()
+      });
+
+      // Create transaction item record
+      const transactionItem = new TransactionItem({
+        transaction_id: transaction._id,
+        inventory_id: inventoryItem._id,
+        user_id: sample.user_id,
+        buyer_id: sample.buyer_id,
+        qty: product.qty,
+        measurement: 1, // assuming 1:1 measurement for samples
+        shipping: shipping_per_unit,
+        type: "inventory_addition",
+        unit: product.unit,
+        price: product.price,
+        sale_price: product.price, // assuming sale_price equals price for samples
+      });
+      
+      await transactionItem.save();
+      
+      // Collect the TransactionItem _id
+      transactionItemIds.push({ transactionitem_id: transactionItem._id });
+      
+      // Build description string
+      description += `${product.qty} ${product.unit} of ${product.name} (@ ${formatCurrency(product.price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
+      
+      // Add to totals
+      totalPrice += productTotalPrice;
+      totalShipping +=  Number(productTotalShipping);
+    }
+
+    // ============================================================================
+    // UPDATE TRANSACTION WITH CALCULATED VALUES
+    // ============================================================================
+    const roundBalance = (totalPrice + totalShipping).toFixed(2);
+    
+    transaction.price = totalPrice;
+    transaction.total_shipping = totalShipping.toFixed(2);
+    transaction.items = transactionItemIds;
+    await transaction.save();
+
+    // ============================================================================
+    // UPDATE BUYER BALANCE
+    // ============================================================================
+    await Buyer.findByIdAndUpdate(sample.buyer_id, { 
+      $inc: { currentBalance: roundBalance } 
+    });
+
+    // ============================================================================
+    // CREATE LOGS
+    // ============================================================================
+    createlogs(user, {
+      buyer_id: sample.buyer_id,
+      type: "inventory_addition",
+      transaction_id: transaction._id,
+      amount: parseFloat(roundBalance),
+      description: description.trim(),
+    });
+
+    // ============================================================================
+    // UPDATE SAMPLE STATUS
+    // ============================================================================
+    sample.status = 'accepted';
+    sample.transaction_id = transaction._id; // Link sample to transaction if your schema supports it
+    await sample.save();
+
+    // ============================================================================
+    // SUCCESS RESPONSE
+    // ============================================================================
+    res.status(200).json({ 
+      message: 'Sample accepted and inventory created successfully',
+      transaction_id: transaction._id,
+      sample_id: sample._id,
+      inventory_items_created: sample.products.length,
+      total_amount: roundBalance
+    });
+
+  } catch (error) {
+    console.error('Error accepting sample:', error);
+    res.status(500).json({ error: error });
   }
-
-  sample.status = 'accepted';
-  await sample.save();
-
-  res.status(200).json({ message: 'Accepted' });
 });
 
 // POST /api/samples/:id/return

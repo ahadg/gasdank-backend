@@ -3,6 +3,7 @@ import { authenticateJWT } from "../middlewares/authMiddleware";
 import Notification from "../models/notification";
 import twilio from 'twilio';
 import Buyer from '../models/Buyer';
+import { sendEmail } from '../utils/sendEmail';
 
 const router = Router();
 
@@ -42,27 +43,65 @@ const formatPhoneNumber = (phone: string): string => {
 }
 
 // Generate message content based on notification type
-const generateMessage = (type: 'outstanding' | 'product', customMessage: string, data: any): string => {
-  if (customMessage) {
+function generateMessage(type: string, customMessage: string, data: any) {
+  if (customMessage && customMessage.trim()) {
     return customMessage;
   }
 
   if (type === 'outstanding') {
-    const balance = Math.abs(Number(data.balance));
-    return `Payment Reminder: You have an outstanding balance of $${balance.toLocaleString()} that needs to be paid. Please contact us to arrange payment.`;
+    return `Hello ${data.name}, you have an outstanding balance of $${Math.abs(data.balance).toLocaleString()} that needs to be paid. Please contact us to arrange payment.`;
   } else if (type === 'product') {
-    const productName = data.product?.name || 'New Product';
-    const productPrice = data.product?.price ? ` - $${data.product.price}` : '';
-    return `New Product Available: ${productName}${productPrice}. Contact us for more details and to place your order.`;
+    const productList = data.products.map((p: any) => `${p.name} ($${p.price})`).join(', ');
+    return `Hello ${data.name}, we have new products available: ${productList}. Contact us for more details!`;
   }
 
-  return 'You have received a notification from your wholesale supplier.';
+  return customMessage || 'You have a new notification.';
+}
+
+function generateEmailHtml(type: string, message: string, data: any) {
+  if (type === 'outstanding') {
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
+        <h2 style="color: #dc3545;">Payment Reminder</h2>
+        <p>Dear ${data.name},</p>
+        <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Outstanding Balance: $${Math.abs(data.balance).toLocaleString()}</strong></p>
+        </div>
+        <p>${message}</p>
+        <p>Please contact us at your earliest convenience to arrange payment.</p>
+        <p>Thank you,<br/>Your Wholesale Team</p>
+      </div>
+    `;
+  } else if (type === 'product') {
+    const productHtml = data.products.map((p: any) => `
+      <div style="border: 1px solid #dee2e6; padding: 10px; margin: 10px 0; border-radius: 5px;">
+        <strong>${p.name}</strong><br/>
+        <span style="color: #28a745; font-size: 18px;">$${p.price}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
+        <h2 style="color: #17a2b8;">New Products Available!</h2>
+        <p>Dear ${data.name},</p>
+        <p>We're excited to announce new products available for wholesale purchase:</p>
+        <div style="margin: 20px 0;">
+          ${productHtml}
+        </div>
+        <p>${message}</p>
+        <p>Contact us today to place your order!</p>
+        <p>Best regards,<br/>Your Wholesale Team</p>
+      </div>
+    `;
+  }
+
+  return `<div style="font-family: Arial, sans-serif;">${message}</div>`;
 }
 
 // POST /api/notifications/send - Send bulk notifications
 router.post('/send', async (req: Request, res: Response) => {
   try {
-    const { recipients, type, message, product } = req.body;
+    const { recipients, type, message, products, communicationMethod = 'sms' } = req.body; // Changed product to products and added communicationMethod
     const user_id = (req as any).user?.id || (req as any).user?._id;
 
     // Validation
@@ -78,31 +117,41 @@ router.post('/send', async (req: Request, res: Response) => {
       });
     }
 
-    if (type === 'product' && !product) {
+    if (type === 'product' && (!products || !Array.isArray(products) || products.length === 0)) { // Updated validation for multiple products
       return res.status(400).json({ 
-        error: 'Product information is required for product notifications' 
+        error: 'Products array is required for product notifications and must not be empty' 
       });
     }
 
-    // Check if Twilio is configured
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
-      return res.status(500).json({ 
-        error: 'Twilio configuration is missing. Please check environment variables.' 
+    if (!['sms', 'email'].includes(communicationMethod)) {
+      return res.status(400).json({ 
+        error: 'Communication method must be either "sms" or "email"' 
       });
+    }
+
+    // Check configurations based on communication method
+    if (communicationMethod === 'sms') {
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+        return res.status(500).json({ 
+          error: 'Twilio configuration is missing. Please check environment variables.' 
+        });
+      }
     }
 
     const results: {
       successful: Array<{
         recipient_id: any;
         name: string;
-        phone: string;
-        sms_sid?: string;
+        contact: string;
+        method: string;
+        message_id?: string;
         notification_id: any;
       }>;
       failed: Array<{
         recipient_id: any;
         name: string;
-        phone: string;
+        contact: string;
+        method: string;
         error: string;
         notification_id?: any;
       }>;
@@ -118,14 +167,14 @@ router.post('/send', async (req: Request, res: Response) => {
       try {
         const { id, email, name, balance, phone } = recipient;
 
-        // Generate message content
+        // Generate message content for multiple products
         const messageContent = generateMessage(type, message, { 
           balance, 
-          product,
+          products, // Changed from product to products
           name 
         });
 
-        let smsResult = null;
+        let communicationResult = null;
         let notificationData: any = {
           user_id,
           recipient_id: id,
@@ -133,15 +182,18 @@ router.post('/send', async (req: Request, res: Response) => {
           recipient_email: email,
           type,
           message: messageContent,
+          communication_method: communicationMethod, // Add communication method
           status: 'pending',
           created_at: new Date()
         };
 
-        // Add product info for product notifications
-        if (type === 'product' && product) {
-          notificationData.product_id = product._id;
-          notificationData.product_name = product.name;
-          notificationData.product_price = product.price;
+        // Add products info for product notifications
+        if (type === 'product' && products) {
+          notificationData.products = products.map((p : any) => ({
+            product_id: p._id,
+            product_name: p.name,
+            product_price: p.price
+          }));
         }
 
         // Add balance info for outstanding notifications
@@ -149,44 +201,82 @@ router.post('/send', async (req: Request, res: Response) => {
           notificationData.outstanding_balance = balance;
         }
 
-        // Send SMS if phone number is available
-        if (phone) {
-          const formattedPhone = formatPhoneNumber(phone);
-          
-          if (formattedPhone) {
-            try {
-              smsResult = await twilioClient.messages.create({
-                body: messageContent,
-                from: process.env.TWILIO_PHONE_NUMBER,
-                to: formattedPhone
-              });
-
-              notificationData.sms_sid = smsResult.sid;
-              notificationData.sms_status = smsResult.status;
-              notificationData.phone_number = formattedPhone;
-              notificationData.status = 'sent';
-              notificationData.sent_at = new Date();
-              
-            } catch (smsError: any) {
-              if (smsError.code === 21408) {
-                return res.status(400).json({
-                  success: false,
-                  error: 'SMS sending is not enabled for the destination country.',
-                  suggestion: 'Enable SMS permissions for this country in your Twilio Console: https://www.twilio.com/console/sms/settings/geo-permissions'
+        // Send based on communication method
+        if (communicationMethod === 'sms') {
+          // Send SMS if phone number is available
+          if (phone) {
+            const formattedPhone = formatPhoneNumber(phone);
+            
+            if (formattedPhone) {
+              try {
+                communicationResult = await twilioClient.messages.create({
+                  body: messageContent,
+                  from: process.env.TWILIO_PHONE_NUMBER,
+                  to: formattedPhone
                 });
+
+                notificationData.sms_sid = communicationResult.sid;
+                notificationData.sms_status = communicationResult.status;
+                notificationData.phone_number = formattedPhone;
+                notificationData.status = 'sent';
+                notificationData.sent_at = new Date();
+                
+              } catch (smsError: any) {
+                if (smsError.code === 21408) {
+                  return res.status(400).json({
+                    success: false,
+                    error: 'SMS sending is not enabled for the destination country.',
+                    suggestion: 'Enable SMS permissions for this country in your Twilio Console: https://www.twilio.com/console/sms/settings/geo-permissions'
+                  });
+                }
+                console.error(`SMS Error for ${name} (${formattedPhone}):`, smsError);
+                notificationData.status = 'failed';
+                notificationData.error_message = smsError.message;
+                notificationData.phone_number = formattedPhone;
               }
-              console.error(`SMS Error for ${name} (${formattedPhone}):`, smsError);
+            } else {
               notificationData.status = 'failed';
-              notificationData.error_message = smsError.message;
-              notificationData.phone_number = formattedPhone;
+              notificationData.error_message = 'Invalid phone number format';
             }
           } else {
             notificationData.status = 'failed';
-            notificationData.error_message = 'Invalid phone number format';
+            notificationData.error_message = 'No phone number provided';
           }
-        } else {
-          notificationData.status = 'failed';
-          notificationData.error_message = 'No phone number provided';
+        } else if (communicationMethod === 'email') {
+          // Send Email if email is available
+          if (email) {
+            try {
+              // Generate email subject and HTML content
+              const emailSubject = type === 'outstanding' 
+                ? 'Payment Reminder' 
+                : `New Products Available: ${products.map((p : any) => p.name).join(', ')}`;
+              
+              const emailHtml = generateEmailHtml(type, messageContent, { 
+                balance, 
+                products, 
+                name 
+              });
+
+              await sendEmail({
+                to: email,
+                subject: emailSubject,
+                html: emailHtml,
+                text: messageContent
+              });
+
+              notificationData.email_status = 'sent';
+              notificationData.status = 'sent';
+              notificationData.sent_at = new Date();
+              
+            } catch (emailError: any) {
+              console.error(`Email Error for ${name} (${email}):`, emailError);
+              notificationData.status = 'failed';
+              notificationData.error_message = emailError.message;
+            }
+          } else {
+            notificationData.status = 'failed';
+            notificationData.error_message = 'No email address provided';
+          }
         }
 
         // Save notification to database
@@ -196,15 +286,17 @@ router.post('/send', async (req: Request, res: Response) => {
           results.successful.push({
             recipient_id: id,
             name,
-            phone: notificationData.phone_number,
-            sms_sid: smsResult?.sid,
+            contact: communicationMethod === 'email' ? email : (notificationData.phone_number || phone),
+            method: communicationMethod,
+            message_id: communicationResult?.sid || 'email_sent',
             notification_id: savedNotification._id
           });
         } else {
           results.failed.push({
             recipient_id: id,
             name,
-            phone: phone || 'N/A',
+            contact: communicationMethod === 'email' ? (email || 'N/A') : (phone || 'N/A'),
+            method: communicationMethod,
             error: notificationData.error_message,
             notification_id: savedNotification._id
           });
@@ -215,7 +307,8 @@ router.post('/send', async (req: Request, res: Response) => {
         results.failed.push({
           recipient_id: recipient.id,
           name: recipient.name,
-          phone: recipient.phone || 'N/A',
+          contact: communicationMethod === 'email' ? (recipient.email || 'N/A') : (recipient.phone || 'N/A'),
+          method: communicationMethod,
           error: error.message || 'Unknown error occurred'
         });
       }
@@ -223,7 +316,7 @@ router.post('/send', async (req: Request, res: Response) => {
 
     // Return results
     const response = {
-      message: `Processed ${results.total} notifications`,
+      message: `Processed ${results.total} notifications via ${communicationMethod.toUpperCase()}`,
       results: {
         successful: results.successful.length,
         failed: results.failed.length,
@@ -234,12 +327,12 @@ router.post('/send', async (req: Request, res: Response) => {
 
     // Return appropriate status code
     if (results.successful.length === 0) {
-      return res.status(207).json({ // Multi-status for partial success
+      return res.status(207).json({
         ...response,
         warning: 'No notifications were sent successfully'
       });
     } else if (results.failed.length > 0) {
-      return res.status(207).json({ // Multi-status for partial success
+      return res.status(207).json({
         ...response,
         warning: 'Some notifications failed to send'
       });
@@ -255,6 +348,7 @@ router.post('/send', async (req: Request, res: Response) => {
     });
   }
 });
+
 
 // POST /api/notification/send-invoice/:buyer_id - Send invoice SMS to specific client
 router.post('/send-invoice/:buyer_id', async (req: Request, res: Response) => {

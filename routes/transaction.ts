@@ -16,7 +16,7 @@ router.use(authenticateJWT);
 
 
 
-const createlogs = (user:any,obj:any) => {
+export const createlogs = (user:any,obj:any) => {
   createActivity({
     user_id : user?._id, 
     user_created_by : user?.user_created_by,
@@ -32,7 +32,7 @@ const createlogs = (user:any,obj:any) => {
     buyer_id: obj?.buyer_id
   })
 }
- const formatCurrency = (value: number) =>
+ export const formatCurrency = (value: number) =>
     `$${value?.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 
@@ -93,8 +93,8 @@ router.get('/:id', async (req, res) => {
 
 
 
-router.post('/', checkAccess("sale","create"), async (req: Request, res: Response) => {
-  // Expected payload:
+router.post('/', checkAccess("sale", "create"), async (req: Request, res: Response) => {
+  // Expected payload structure:
   // {
   //   user_id: string,
   //   buyer_id: string,
@@ -113,22 +113,49 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
   //   // For payment transactions:
   //   payment_method?: string
   // }
-  const { user_id,worker_id, buyer_id, items, payment, price,total_shipping, payment_direction, sale_price, profit, notes, type, payment_method } = req.body;
+
+  // Extract data from request body
+  const { 
+    user_id, 
+    worker_id, 
+    buyer_id, 
+    items, 
+    payment, 
+    price, 
+    total_shipping, 
+    payment_direction, 
+    sale_price, 
+    profit, 
+    notes, 
+    type, 
+    payment_method 
+  } = req.body;
+
   console.log("req.body", req.body);
+
   // Default transaction type is "sale"
   const transactionType: string = type || "sale";
-  const the_user = await User.findById(user_id)
-  const the_buyer = await Buyer.findById(buyer_id)
+  
+  // Fetch user and buyer data
+  const the_user = await User.findById(user_id);
+  const the_buyer = await Buyer.findById(buyer_id);
 
+  // ============================================================================
+  // INVENTORY VALIDATION FOR SALES
+  // ============================================================================
   for (const item of items || []) {
-    // For sale, check inventory availability.
     if (transactionType === "sale") {
       const inventoryItem = await Inventory.findById(item.inventory_id);
+      
       if (!inventoryItem) {
-        return res.status(404).json({ error: `Inventory item ${item.inventory_id} not found` });
+        return res.status(404).json({ 
+          error: `Inventory item ${item.inventory_id} not found` 
+        });
       }
-      // Calculate the required quantity based on quantity and measurement multiplier.
+
+      // Calculate the required quantity based on quantity and measurement multiplier
       const requiredQty = item.qty * item.measurement;
+      
       if (inventoryItem.qty < requiredQty) {
         return res.status(400).json({ 
           error: `Insufficient inventory for product ${inventoryItem.name}. Available: ${inventoryItem.qty}, Required: ${requiredQty}` 
@@ -138,7 +165,9 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
   }
 
   try {
-    // Create the transaction document
+    // ============================================================================
+    // CREATE TRANSACTION DOCUMENT
+    // ============================================================================
     const transaction = new Transaction({
       user_id,
       buyer_id,
@@ -149,14 +178,18 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
       price: price || payment, // using the 'price' field from schema
       payment_direction,
       sale_price: sale_price,
-      total_shipping : total_shipping,
-      profit: profit,
+      total_shipping: total_shipping?.toFixed(2),
+      profit: profit?.toFixed(2),
       items: [] // start with empty items array
     });
+    
     await transaction.save();
 
+    // ============================================================================
+    // HANDLE PAYMENT TRANSACTIONS
+    // ============================================================================
     if (transactionType === "payment") {
-      // For payment type, create a TransactionPayment record instead of items
+      // Create a TransactionPayment record
       const transactionPayment = new TransactionPayment({
         transaction_id: transaction._id,
         buyer_id,
@@ -165,25 +198,38 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
         payment_method: payment_method || "unspecified",
         payment_date: new Date(),
       });
+      
       await transactionPayment.save();
-      // manage buyer's currentBalance by payment amount
-      if(payment_direction === "received") {
-        await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -payment } });
-      }  else {
-        await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: payment } });
+
+      // Update buyer's balance based on payment direction
+      if (payment_direction === "received") {
+        await Buyer.findByIdAndUpdate(buyer_id, { 
+          $inc: { currentBalance: -payment } 
+        });
+      } else {
+        await Buyer.findByIdAndUpdate(buyer_id, { 
+          $inc: { currentBalance: payment } 
+        });
       }
-      // manage user's currentBalance by payment amount
-      if(payment_method === "Cash") {
-        if(payment_direction === "received") {
-          await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: payment }})
-        } else if(payment_direction === "given") {
-          await User.findByIdAndUpdate(user_id, {$inc: { cash_balance: -payment }})
+
+      // Update user's balance based on payment method
+      if (payment_method === "Cash") {
+        if (payment_direction === "received") {
+          await User.findByIdAndUpdate(user_id, { 
+            $inc: { cash_balance: payment } 
+          });
+        } else if (payment_direction === "given") {
+          await User.findByIdAndUpdate(user_id, { 
+            $inc: { cash_balance: -payment } 
+          });
         }
       } else {
-        console.log("the_user?.other_balance",the_user)
-        console.log("the_user?.other_balance",the_user?.other_balance)
+        // Handle other payment methods
+        console.log("the_user?.other_balance", the_user);
+        console.log("the_user?.other_balance", the_user?.other_balance);
+        
+        // Initialize the nested key if it doesn't exist
         if (!the_user?.other_balance?.hasOwnProperty(payment_method)) {
-          // Initialize the nested key to 0 if it doesn't exist.
           await User.findByIdAndUpdate(user_id, { 
             $set: { [`other_balance.${payment_method}`]: 0 }
           });
@@ -198,68 +244,36 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
             $inc: { [`other_balance.${payment_method}`]: -Number(payment) } 
           });
         }
-        
-        
       }
+
       // Link the TransactionPayment record to the transaction
       transaction.transactionpayment_id = transactionPayment._id;
       await transaction.save();
-      createlogs(the_user,
-        {buyer_id,transaction_id : transaction?._id,type :transactionType,amount : payment_direction === "received" ? Number(payment) : -Number(payment),payment_method,payment_direction,
-        description : `${payment} ${payment_method} ${payment_direction} ${payment_direction === "received" ? "from" : "to"} ${the_buyer?.firstName + " " + the_buyer?.lastName}`
-      })
-    } else if (transactionType === "inventory_addition") {
-       // For sale: inventory decreases; for return: inventory increases.
-       const transactionItemIds: { transactionitem_id: any }[] = [];
-       let description = ''
-       for (const item of items) {
-         // Create the transaction item record.
-          description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " +(formatCurrency(item.shipping * item.qty)) + ")")} \n`
-         const transactionItem = new TransactionItem({
-           transaction_id: transaction._id,
-           inventory_id: item.inventory_id,
-           user_id,
-           buyer_id,
-           qty: item.qty,
-           measurement: item.measurement,
-           shipping : item?.shipping,
-           type,
-           unit: item.unit,
-           price: item.price,
-           sale_price: item.sale_price,
-         });
-         await transactionItem.save();
- 
-         // Collect the TransactionItem _id.
-         transactionItemIds.push({ transactionitem_id: transactionItem._id });
-         console.log("transactionType", transactionType);
 
-         // Update the inventory quantity.
-         //await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });
-       }
-       let total_shipping_val = items.reduce((total: number, item: any) => {
-        const shipping = Number(item?.shipping) * Number(item?.qty) || 0;
-        return total + shipping;
-      }, 0);
-       console.log("total_shipping_val",(total_shipping_val))
-       console.log("(price + total_shipping)",(price + total_shipping_val))
-       await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -(price + total_shipping_val)  } });
- 
-       // Update the transaction document with the list of transaction item IDs.
-       transaction.items = transactionItemIds;
-       await transaction.save();
-       createlogs(the_user,
-        {buyer_id,type : transactionType,transaction_id : transaction?._id,amount : price + total_shipping,
-        description,
-      })
-    } else {
-      // For sale and return, process each transaction item.
-      // For sale: inventory decreases; for return: inventory increases.
+      // Create logs for payment transaction
+      createlogs(the_user, {
+        buyer_id,
+        transaction_id: transaction?._id,
+        type: transactionType,
+        amount: payment_direction === "received" ? Number(payment) : -Number(payment),
+        payment_method,
+        payment_direction,
+        description: `${payment} ${payment_method} ${payment_direction} ${payment_direction === "received" ? "from" : "to"} ${the_buyer?.firstName + " " + the_buyer?.lastName}`
+      });
+
+    // ============================================================================
+    // HANDLE INVENTORY ADDITION TRANSACTIONS
+    // ============================================================================
+    } else if (transactionType === "inventory_addition") {
       const transactionItemIds: { transactionitem_id: any }[] = [];
-      let description = ''
+      let description = '';
+
+      // Process each item for inventory addition
       for (const item of items) {
-        // Create the transaction item record.
-        description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " +(formatCurrency(item.shipping * item.qty)) + ")")} \n`
+        // Build description string
+        description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " + (formatCurrency(item.shipping * item.qty)) + ")")} \n`;
+        
+        // Create transaction item record
         const transactionItem = new TransactionItem({
           transaction_id: transaction._id,
           inventory_id: item.inventory_id,
@@ -267,46 +281,134 @@ router.post('/', checkAccess("sale","create"), async (req: Request, res: Respons
           buyer_id,
           qty: item.qty,
           measurement: item.measurement,
-          shipping : item?.shipping,
+          shipping: item?.shipping,
           type,
           unit: item.unit,
           price: item.price,
           sale_price: item.sale_price,
         });
+        
         await transactionItem.save();
-
-        // Collect the TransactionItem _id.
+        
+        // Collect the TransactionItem _id
         transactionItemIds.push({ transactionitem_id: transactionItem._id });
         console.log("transactionType", transactionType);
-        // Determine inventory change: negative for sale, positive for return.
-        const qtyChange = (transactionType === "return") ? (item.qty * item.measurement) : -(item.qty * item.measurement);
-        console.log("qtyChange", qtyChange);
-        
-        // Update buyer's currentBalance accordingly.
-        if (transactionType === "sale") {
-          console.log(item.sale_price * item.measurement * item.qty + item?.shipping)
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: (item.sale_price * item.measurement * item.qty) + (item.qty * item?.shipping ) } });
-        } else if (transactionType === "return") {
-          console.log(-(item.price * item.measurement * item.qty + (item.qty * item?.shipping )))
-          await Buyer.findByIdAndUpdate(buyer_id, { $inc: { currentBalance: -((parseInt(item.price) * parseInt(item.measurement)) * item.qty + (parseInt(item.qty) * parseInt(item?.shipping ))) } });
-        }
-        // Update the inventory quantity.
-        await Inventory.findByIdAndUpdate(item.inventory_id, { $inc: { qty: qtyChange } });
       }
 
-      // Update the transaction document with the list of transaction item IDs.
+      // Calculate total shipping value
+      let total_shipping_val = items.reduce((total: number, item: any) => {
+        const shipping = Number(item?.shipping) * Number(item?.qty) || 0;
+        return total + shipping;
+      }, 0);
+      total_shipping_val = total_shipping_val.toFixed(2)
+
+      console.log("total_shipping_val", (total_shipping_val));
+      console.log("(price + total_shipping)", (price + total_shipping_val));
+      let roundBalance = (Number(price) + Number(total_shipping_val)).toFixed(2);
+      console.log("roundBalance_total_shipping_val", roundBalance);
+      // Update buyer's balance
+      await Buyer.findByIdAndUpdate(buyer_id, { 
+        $inc: { currentBalance: -roundBalance } 
+      });
+
+      // Update transaction with item IDs
       transaction.items = transactionItemIds;
       await transaction.save();
-      createlogs(the_user,
-        {
-          transaction_id : transaction._id,
+
+      // Create logs for inventory addition
+      createlogs(the_user, {
+        buyer_id,
+        type: transactionType,
+        transaction_id: transaction?._id,
+        amount: price + total_shipping,
+        description,
+      });
+
+    // ============================================================================
+    // HANDLE SALE AND RETURN TRANSACTIONS
+    // ============================================================================
+    } else {
+      const transactionItemIds: { transactionitem_id: any }[] = [];
+      let description = '';
+
+      // Process each item for sale/return
+      for (const item of items) {
+        // Build description string
+        description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " + (formatCurrency(item.shipping * item.qty)) + ")")} \n`;
+        
+        // Create transaction item record
+        const transactionItem = new TransactionItem({
+          transaction_id: transaction._id,
+          inventory_id: item.inventory_id,
+          user_id,
           buyer_id,
-          type : transactionType,amount : transactionType === "sale" ? parseInt(sale_price + total_shipping) : -parseInt(price + total_shipping),
-          description 
-      })
+          qty: item.qty,
+          measurement: item.measurement,
+          shipping: item?.shipping,
+          type,
+          unit: item.unit,
+          price: item.price,
+          sale_price: item.sale_price,
+        });
+        
+        await transactionItem.save();
+
+        // Collect the TransactionItem _id
+        transactionItemIds.push({ transactionitem_id: transactionItem._id });
+        console.log("transactionType", transactionType);
+
+        // Determine inventory change: negative for sale, positive for return
+        const qtyChange = (transactionType === "return") 
+          ? (item.qty * item.measurement) 
+          : -(item.qty * item.measurement);
+        
+        console.log("qtyChange", qtyChange);
+
+        // Update buyer's currentBalance based on transaction type
+        if (transactionType === "sale") {
+          const saleAmount = (item.sale_price * item.measurement * item.qty) + (item.qty * item?.shipping);
+          console.log(saleAmount);
+          await Buyer.findByIdAndUpdate(buyer_id, { 
+            $inc: { currentBalance: saleAmount } 
+          });
+        } else if (transactionType === "return") {
+          const returnAmount = -((parseInt(item.price) * parseInt(item.measurement)) * item.qty + (parseInt(item.qty) * parseInt(item?.shipping)));
+          console.log(returnAmount);
+          await Buyer.findByIdAndUpdate(buyer_id, { 
+            $inc: { currentBalance: returnAmount } 
+          });
+        }
+
+        // Update the inventory quantity
+        await Inventory.findByIdAndUpdate(item.inventory_id, { 
+          $inc: { qty: qtyChange } 
+        });
+      }
+
+      // Update transaction with item IDs
+      transaction.items = transactionItemIds;
+      await transaction.save();
+
+      // Create logs for sale/return transaction
+      createlogs(the_user, {
+        transaction_id: transaction._id,
+        buyer_id,
+        type: transactionType,
+        amount: transactionType === "sale" 
+          ? parseInt(sale_price + total_shipping) 
+          : -parseInt(price + total_shipping),
+        description
+      });
     }
 
-    res.status(201).json({ message: 'Transaction processed', transaction_id: transaction._id });
+    // ============================================================================
+    // SUCCESS RESPONSE
+    // ============================================================================
+    res.status(201).json({ 
+      message: 'Transaction processed', 
+      transaction_id: transaction._id 
+    });
+
   } catch (error: any) {
     console.error('error', error);
     res.status(500).json({ error: error.message });
@@ -369,7 +471,7 @@ async (req: Request, res: Response) => {
       // Calculate original totals using the correct price field
       const originalTotal = calculateTransactionTotal(original_items || [], original_total_shipping || 0, transactionType, true);
       const newTotal = calculateTransactionTotal(items || [], total_shipping || 0, transactionType, true);
-      const totalDifference = newTotal - originalTotal;
+      const totalDifference = (newTotal - originalTotal).toFixed(2);
       
       console.log({ originalTotal, newTotal, totalDifference, transactionType });
 

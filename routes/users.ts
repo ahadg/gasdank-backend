@@ -282,7 +282,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 });
 
 
-router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
+router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
     if (!user_id) {
@@ -294,6 +294,7 @@ router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), 
     let dateFilter: any = {};
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
+    console.log({startDate,endDate})
     if (startDate) {
       dateFilter.$gte = new Date(startDate);
     }
@@ -315,7 +316,7 @@ router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), 
       },
       { $group: { _id: null, totalSales: { $sum: "$sale_price" } } }
     ]);
-    const totalSales = totalSalesAgg[0]?.totalSales || 0;
+    const totalSales = (totalSalesAgg[0]?.totalSales || 0).toFixed(2)
 
     // 2. Total Profit: Sum of profit from "sale" transactions for this user.
     const totalProfitAgg = await Transaction.aggregate([
@@ -329,7 +330,7 @@ router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), 
       },
       { $group: { _id: null, totalProfit: { $sum: "$profit" } } }
     ]);
-    const totalProfit = totalProfitAgg[0]?.totalProfit || 0;
+    const totalProfit = (totalProfitAgg[0]?.totalProfit || 0).toFixed(2)
 
     // 3. Inventory Value: Sum over all Inventory documents (price * qty) for this user.
     const inventoryValueAgg = await Inventory.aggregate([
@@ -349,7 +350,9 @@ router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), 
       }
     ]);
     
-    const inventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
+    // Round inventory value to avoid floating point precision issues
+    const rawInventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
+    const inventoryValue = rawInventoryValue.toFixed(2)
 
     // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
     const clientPayableAgg = await Buyer.aggregate([
@@ -363,32 +366,54 @@ router.get('/stats/:user_id',authenticateJWT, checkAccess("dashboard", "read"), 
       { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
       { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
     ]);
-    const companyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
+    const rawCompanyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
+    const companyPayableBalance = (rawCompanyPayableBalance).toFixed(2)
 
     // Get the logged-in user's financial details.
     const user = await User.findById(userObjectId);
 
-    // 6. Company Balance: For example, calculated as:
-    //    Inventory Value + Client Payable Balances + online_balance + cash_balance - (absolute value of company payable balance)
+    // 6. Company Balance: Fixed calculation to avoid floating-point precision issues
     console.log({
+      rawInventoryValue,
       inventoryValue,
       clientPayableBalances,
       companyPayableBalance,
-      online_balance : user?.online_balance || 0,
-      cash_balance : user?.cash_balance || 0
-    })
-    const companyBalance = Number(inventoryValue) + Number(clientPayableBalances) + Number(user?.cash_balance || 0) - Math.abs(companyPayableBalance);
-    console.log({companyBalance})
+      online_balance: user?.online_balance || 0,
+      cash_balance: user?.cash_balance || 0
+    });
+
+    // Debug: Log individual components for analysis
+    console.log('=== BALANCE CALCULATION DEBUG ===');
+    console.log('Raw inventoryValue:', inventoryValue);
+    console.log('Raw clientPayableBalances:', clientPayableBalances);
+    console.log('Raw companyPayableBalance:', companyPayableBalance);
+    console.log('User cash_balance:', user?.cash_balance || 0);
+    console.log('Math.abs(companyPayableBalance):', Math.abs(companyPayableBalance));
+
+    // Calculate company balance without floating-point precision issues
+    const rawCompanyBalance = inventoryValue + clientPayableBalances + (user?.cash_balance || 0) - Math.abs(companyPayableBalance);
+    const companyBalance = rawCompanyBalance.toFixed(2)// Round to 2 decimal places
+    
+    console.log('Raw company balance calculation:', rawCompanyBalance);
+    console.log('Final company balance:', companyBalance);
+    console.log('=== END DEBUG ===');
+
+    // Helper function to safely format numbers
+    const formatNumber = (value: any): number => {
+      const num = Number(value) || 0;
+      return parseFloat(num.toFixed(2));
+    };
+
     res.status(200).json({
-      totalSales,
-      totalProfit,
-      inventoryValue : inventoryValue?.toFixed(2),
-      clientPayableBalances,
-      companyPayableBalance,
-      loggedInUserTotalBalance: user?.cash_balance,
-      onlineBalance: user?.online_balance,
-      companyBalance : companyBalance?.toFixed(2),
-      other_balance : user.other_balance
+      totalSales: formatNumber(totalSales),
+      totalProfit: formatNumber(totalProfit),
+      inventoryValue: formatNumber(inventoryValue),
+      clientPayableBalances: formatNumber(clientPayableBalances),
+      companyPayableBalance: formatNumber(companyPayableBalance),
+      loggedInUserTotalBalance: formatNumber(user?.cash_balance),
+      onlineBalance: formatNumber(user?.online_balance),
+      companyBalance: formatNumber(companyBalance),
+      other_balance: formatNumber(user?.other_balance)
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

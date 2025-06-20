@@ -6,6 +6,7 @@ export interface ISample extends Document {
   user_id: mongoose.Types.ObjectId
   status: string
   created_at: Date
+  totalShippingCost : String,
   products: {
     name: string
     category_id: mongoose.Types.ObjectId
@@ -23,6 +24,7 @@ const SampleSchema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, default: 'holding' },
   created_at: { type: Date, default: Date.now },
+  totalShippingCost : {type : String, required : true},
   products: [
     {
       name: { type: String, required: true },
