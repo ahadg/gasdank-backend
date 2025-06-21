@@ -123,6 +123,7 @@ router.post('/:id/accept', async (req, res) => {
     // ============================================================================
     const transactionItemIds = [];
     let totalPrice = 0;
+    let totalPriceWithShipping = 0;
     let totalShipping = 0;
     let description = '';
 
@@ -175,16 +176,17 @@ router.post('/:id/accept', async (req, res) => {
       
       // Add to totals
       totalPrice += productTotalPrice;
+      totalPriceWithShipping += (product.price + product.shippingCost) * product.qty;
       totalShipping +=  Number(productTotalShipping);
     }
 
     // ============================================================================
     // UPDATE TRANSACTION WITH CALCULATED VALUES
     // ============================================================================
-    const roundBalance = (totalPrice + totalShipping).toFixed(2);
+    const roundBalance = (totalPriceWithShipping).toFixed(2);
     
     transaction.price = totalPrice;
-    transaction.total_shipping = totalShipping.toFixed(2);
+    transaction.total_shipping = Number(sample?.totalShippingCost).toFixed(2);
     transaction.items = transactionItemIds;
     await transaction.save();
 
@@ -192,7 +194,7 @@ router.post('/:id/accept', async (req, res) => {
     // UPDATE BUYER BALANCE
     // ============================================================================
     await Buyer.findByIdAndUpdate(sample.buyer_id, { 
-      $inc: { currentBalance: roundBalance } 
+      $inc: { currentBalance: -roundBalance } 
     });
 
     // ============================================================================

@@ -366,8 +366,9 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
 
         // Update buyer's currentBalance based on transaction type
         if (transactionType === "sale") {
-          const saleAmount = (item.sale_price * item.measurement * item.qty) + (item.qty * item?.shipping);
-          console.log(saleAmount);
+          const saleAmount = (item.sale_price * item.measurement * item.qty).toFixed(2) 
+          //+ (item.qty * item?.shipping);
+          console.log("saleAmount",saleAmount);
           await Buyer.findByIdAndUpdate(buyer_id, { 
             $inc: { currentBalance: saleAmount } 
           });
@@ -375,7 +376,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
           const returnAmount = -((parseInt(item.price) * parseInt(item.measurement)) * item.qty + (parseInt(item.qty) * parseInt(item?.shipping)));
           console.log(returnAmount);
           await Buyer.findByIdAndUpdate(buyer_id, { 
-            $inc: { currentBalance: returnAmount } 
+            $inc: { currentBalance: returnAmount.toFixed(2) } 
           });
         }
 
@@ -599,7 +600,7 @@ async (req: Request, res: Response) => {
       if (transactionType === 'sale') {
         // Calculate total profit for sale transactions
         const totalProfit = items.reduce((acc: number, item: any) => {
-          const profit = (item.qty || 0) * (item.measurement || 1) * ((item.sale_price || 0) - (item.price || 0));
+          const profit = (item.qty || 0) * (item.measurement || 1) * ((item.sale_price || 0) - (item.price * item?.shipping));
           return acc + profit;
         }, 0);
         existingTransaction.

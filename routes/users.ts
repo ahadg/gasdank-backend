@@ -391,7 +391,7 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     console.log('Math.abs(companyPayableBalance):', Math.abs(companyPayableBalance));
 
     // Calculate company balance without floating-point precision issues
-    const rawCompanyBalance = inventoryValue + clientPayableBalances + (user?.cash_balance || 0) - Math.abs(companyPayableBalance);
+    const rawCompanyBalance = Number(inventoryValue) + clientPayableBalances + (user?.cash_balance || 0) - Math.abs(Number(companyPayableBalance));
     const companyBalance = rawCompanyBalance.toFixed(2)// Round to 2 decimal places
     
     console.log('Raw company balance calculation:', rawCompanyBalance);
