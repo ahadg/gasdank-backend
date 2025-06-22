@@ -11,6 +11,7 @@ import { twilioClient } from './notifications';
 import { createlogs, formatCurrency } from './transaction';
 import TransactionItem from '../models/TransactionItem';
 import Transaction from '../models/Transaction';
+import notification from '../models/notification';
 
 
 const router = Router();
@@ -44,8 +45,9 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { user_id, buyer_id, status = 'holding', products,totalShippingCost } = req.body;
-    console.log("req.body;",req.body)
+    const { user_id, buyer_id, status = 'holding', products, totalShippingCost } = req.body;
+    console.log("req.body;", req.body);
+
     if (!mongoose.Types.ObjectId.isValid(user_id) || !mongoose.Types.ObjectId.isValid(buyer_id)) {
       return res.status(400).json({ error: 'Invalid user_id or buyer_id' });
     }
@@ -54,21 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Products must be a non-empty array' });
     }
 
-    // for (const product of products) {
-    //   if (
-    //     !product.name ||
-    //     !product.category_id ||
-    //     !mongoose.Types.ObjectId.isValid(product.category_id) ||
-    //     typeof product.qty !== 'number' ||
-    //     typeof product.unit !== 'string' ||
-    //     typeof product.measurement !== 'number' ||
-    //     typeof product.price !== 'number' ||
-    //     typeof product.shippingCost !== 'number'
-    //   ) {
-    //     return res.status(400).json({ error: 'Invalid product details' });
-    //   }
-    // }
-
+    // Create the new sample
     const newSample = new Sample({
       user_id,
       buyer_id,
@@ -78,6 +66,25 @@ router.post('/', async (req: Request, res: Response) => {
     });
 
     await newSample.save();
+
+    // Create notification for the buyer
+    // try {
+    //   const notification = new Notification({
+    //     user_id: buyer_id, // recipient (buyer)
+    //     actorId: user_id,  // person who triggered it (seller/user)
+    //     type: 'sample_created',
+    //     message: `A new sample with ${products.length} product${products.length > 1 ? 's' : ''} has been sent to you`,
+    //     activityId: newSample._id, // reference to the sample
+    //     isRead: false
+    //   });
+
+    //   await notification.save();
+    //   console.log('Notification created successfully for buyer:', buyer_id);
+    // } catch (notificationError) {
+    //   console.error('Error creating notification:', notificationError);
+    //   // Don't fail the entire request if notification fails
+    // }
+
     res.status(201).json(newSample);
   } catch (err: any) {
     console.error('Error creating sample:', err);
@@ -179,7 +186,8 @@ router.post('/:id/accept', async (req, res) => {
       totalPriceWithShipping += (product.price + product.shippingCost) * product.qty;
       totalShipping +=  Number(productTotalShipping);
     }
-
+    // create notification
+    //notification
     // ============================================================================
     // UPDATE TRANSACTION WITH CALCULATED VALUES
     // ============================================================================

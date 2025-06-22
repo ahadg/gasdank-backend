@@ -11,9 +11,9 @@ const router = Router();
 // Optionally protect all /api/users endpoints
 router.use(authenticateJWT);
 
-export const createActivity = async (obj:any) => {
+export const createActivity = async (obj:any): Promise<any> => {
     const newActivity = new Activity(obj);
-    await newActivity.save();
+    return await newActivity.save();
 }
 
 // POST /api/activity

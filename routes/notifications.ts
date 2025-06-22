@@ -593,7 +593,123 @@ router.get('/stats/:user_id', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/notifications/:user_id - Create single notification (existing endpoint)
+router.get('/:user_id', async (req: Request, res: Response) => {
+  try {
+    const { user_id } = req.params;
+    const { page = 1, limit = 10, unread_only = false } = req.query;
+    
+    const query: any = { user_id };
+    if (unread_only === 'true') {
+      query.isRead = false;
+    }
+    
+    const notifications = await Notification.find(query)
+      .populate('actorId', 'name email avatar') // Populate actor details
+      .populate('activityId') // Populate activity if needed
+      .sort({ createdAt: -1 }) // Most recent first
+      .limit(parseInt(limit as string))
+      .skip((parseInt(page as string) - 1) * parseInt(limit as string));
+    
+    const totalNotifications = await Notification.countDocuments(query);
+    const unreadCount = await Notification.countDocuments({ 
+      user_id, 
+      isRead: false 
+    });
+    
+    res.status(200).json({
+      notifications,
+      pagination: {
+        currentPage: parseInt(page as string),
+        totalPages: Math.ceil(totalNotifications / parseInt(limit as string)),
+        totalNotifications,
+        unreadCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// PUT /api/notifications/:notification_id/read - Mark single notification as read
+router.put('/:notification_id/read', async (req: Request, res: Response) => {
+  try {
+    const { notification_id } = req.params;
+    
+    const notification = await Notification.findByIdAndUpdate(
+      notification_id,
+      { 
+        isRead: true,
+        updated_at: new Date()
+      },
+      { new: true }
+    );
+    
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    
+    res.status(200).json(notification);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update notification' });
+  }
+});
+
+// PUT /api/notifications/:user_id/mark-all-read - Mark all notifications as read for a user
+router.put('/:user_id/mark-all-read', async (req: Request, res: Response) => {
+  try {
+    const { user_id } = req.params;
+    
+    const result = await Notification.updateMany(
+      { user_id, isRead: false },
+      { 
+        isRead: true,
+        updated_at: new Date()
+      }
+    );
+    
+    res.status(200).json({
+      message: 'All notifications marked as read',
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+// DELETE /api/notifications/:notification_id - Delete single notification
+router.delete('/:notification_id', async (req: Request, res: Response) => {
+  try {
+    const { notification_id } = req.params;
+    
+    const notification = await Notification.findByIdAndDelete(notification_id);
+    
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    
+    res.status(200).json({ message: 'Notification deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
+// DELETE /api/notifications/:user_id/delete-all - Delete all notifications for a user
+router.delete('/:user_id/delete-all', async (req: Request, res: Response) => {
+  try {
+    const { user_id } = req.params;
+    
+    const result = await Notification.deleteMany({ user_id });
+    
+    res.status(200).json({
+      message: 'All notifications deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete all notifications' });
+  }
+});
+
+// POST /api/notifications/:user_id - Create single notification (your existing endpoint)
 router.post('/:user_id', async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
@@ -604,7 +720,7 @@ router.post('/:user_id', async (req: Request, res: Response) => {
     await newNotification.save();
     res.status(201).json(newNotification);
   } catch (error) {
-    res.status(500).json({ error });
+    res.status(500).json({ error: 'Failed to create notification' });
   }
 });
 

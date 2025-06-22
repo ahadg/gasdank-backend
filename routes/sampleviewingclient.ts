@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import mongoose from 'mongoose'
 import { authenticateJWT } from '../middlewares/authMiddleware'
 import SampleViewingClient from '../models/SampleViewingClients'
+import Notification from '../models/notification'
+import { createActivity } from './activity'
 
 const router = Router()
 router.use(authenticateJWT)
@@ -44,17 +46,18 @@ router.get('/worker', async (req: Request, res: Response) => {
 // POST create a new viewing session
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { buyer_id, user_id, items, notes } = req.body
-    const user_created_by = req.user?.id
-    console.log("req.body",req.body)
+    const { buyer_id, user_id, items, notes } = req.body;
+    const user_created_by = req.user?.id;
+    console.log("req.body", req.body);
+
     if (!buyer_id || !user_id || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Missing required fields' })
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const itemsWithStatus = items.map((item: any) => ({
       ...item,
       status: 'pending',
-    }))
+    }));
 
     const newSession = new SampleViewingClient({
       buyer_id,
@@ -63,15 +66,49 @@ router.post('/', async (req: Request, res: Response) => {
       items: itemsWithStatus,
       viewingStatus: 'pending',
       notes,
-    })
+    });
 
-    await newSession.save()
-    res.status(201).json(newSession)
+    await newSession.save();
+
+    const newActivity = await createActivity({
+      user_id : user_created_by, 
+      //user_created_by : user_created_by,
+      buyer_id : buyer_id,
+      action : "create",
+      resource_type : "sample",
+      resource_id : newSession?._id,
+      page : "sampleviewing",
+      type : "sample_viewing_assigned",
+      //amount: amount, // used for financial activity
+      description : `Assigned a new sample viewing session with ${items.length} item${items.length > 1 ? 's' : ''}`,
+    })
+    
+    try {
+      // Notification for the assigned worker
+      const workerNotification = new Notification({
+        user_id: user_id, // recipient (worker)
+        actorId: user_created_by, // person who created the session
+        type: 'sample_viewing_assigned',
+        message: `You have been assigned a new sample viewing session with ${items.length} item${items.length > 1 ? 's' : ''}`,
+        activityId: newActivity._id, // reference to the sample viewing session
+        isRead: false
+      });
+
+      // Save both notifications
+      workerNotification.save()
+
+      console.log('Notifications created successfully for buyer:', buyer_id, 'and worker:', user_id);
+    } catch (notificationError) {
+      console.error('Error creating notifications:', notificationError);
+      // Don't fail the entire request if notification fails
+    }
+
+    res.status(201).json(newSession);
   } catch (err: any) {
-    console.error('Error creating session:', err)
-    res.status(500).json({ error: 'Failed to create session', details: err.message })
+    console.error('Error creating session:', err);
+    res.status(500).json({ error: 'Failed to create session', details: err.message });
   }
-})
+});
 
 // PATCH replace full item list with new statuses
 router.patch('/:sessionId/items', async (req: Request, res: Response) => {

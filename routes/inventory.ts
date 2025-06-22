@@ -41,7 +41,7 @@ router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res:
     // Build the query: always filter by user_id, add category filter if provided.
     const query: any = { user_id: userid };
     if (category) {
-      query.info = { $regex: category, $options: 'i' };
+      query.category =  category;
     }
 
     // Get total number of matching documents (for pagination metadata)
