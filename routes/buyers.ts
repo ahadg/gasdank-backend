@@ -4,17 +4,104 @@ import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
 
 const router = Router();
-router.use(authenticateJWT);
+
+
+// ✅ Example 1: Update by Email
+// json
+// Copy
+// Edit
+// {
+//   "identifier": "niaz@gmail.com",
+//   "phone": "03001234567",
+//   "currentBalance": 1200
+// }
+// ✅ Example 2: Update by First Name
+// json
+// Copy
+// Edit
+// {
+//   "identifier": "Niaz",
+//   "lastName": "Ahmed",
+//   "startingBalance": 1500
+// }
+// ✅ Example 3: Update by Last Name
+// json
+// Copy
+// Edit
+// {
+//   "identifier": "Ahmed",
+//   "email": "newemail@example.com"
+// }
+router.put('/aiedit', async (req: Request, res: Response) => {
+  try {
+    const { identifier, ...updateFields } = req.body;
+
+    if (!identifier) {
+      return res.status(400).json({ error: 'Missing identifier (email, firstName, or lastName)' });
+    }
+
+    // Determine the search field based on identifier format
+    let query: any = {};
+
+    if (typeof identifier === 'string') {
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+
+      if (isEmail) {
+        query.email = identifier;
+      } else {
+        // Fallback to searching both firstName and lastName
+        query = {
+          $or: [
+            { firstName: identifier },
+            { lastName: identifier }
+          ]
+        };
+      }
+    } else {
+      return res.status(400).json({ error: 'Identifier must be a string (email, firstName, or lastName)' });
+    }
+
+    const updatedBuyer = await Buyer.findOneAndUpdate(query, updateFields, { new: true });
+
+    if (!updatedBuyer) {
+      return res.status(404).json({ message: 'Buyer not found' });
+    }
+
+    res.status(200).json(updatedBuyer);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // POST /api/buyers - Create a new buyer
-router.post('/', checkAccess("wholesale", "create"), async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
+    const requiredFields = ['user_id', 'firstName', 'lastName', 'email', 'phone'];
+
+    // Check if all required fields are present
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return res.status(400).json({ error: `Missing required field: ${field}` });
+      }
+    }
+
     const { email } = req.body;
 
     // Check if a buyer with the same email already exists
     const existingBuyer = await Buyer.findOne({ email });
     if (existingBuyer) {
       return res.status(400).json({ error: 'A buyer with this email already exists.' });
+    }
+
+    // Assign currentBalance and startingBalance if balance is provided
+    if ('balance' in req.body && (!req.body.currentBalance || !req.body.startingBalance)) {
+      req.body.currentBalance = req.body.currentBalance ?? req.body.balance;
+      req.body.startingBalance = req.body.startingBalance ?? req.body.balance;
+    }
+
+    // Final validation
+    if (!req.body.currentBalance || !req.body.startingBalance) {
+      return res.status(400).json({ error: 'Missing required field: currentBalance or startingBalance' });
     }
 
     const newBuyer = new Buyer(req.body);
@@ -24,6 +111,11 @@ router.post('/', checkAccess("wholesale", "create"), async (req: Request, res: R
     res.status(500).json({ error: error.message });
   }
 });
+
+
+router.use(authenticateJWT);
+
+
 
 // GET /api/buyers - List all buyers or filter by "user_id" id (assumed as UID)
 router.get('/',checkAccess("wholesale","read"), async (req: Request, res: Response) => {
@@ -67,6 +159,9 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
 
 // DELETE /api/buyers/:id - Delete a buyer by ID (optional)
 router.delete('/:id',checkAccess("wholesale","delete"), async (req: Request, res: Response) => {

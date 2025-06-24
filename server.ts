@@ -24,6 +24,7 @@ import systemsettingsRoutes from './routes/systemsetting';
 import activityRoutes from './routes/activity';
 import notificationRoutes from './routes/notifications';
 import expensesRoutes from './routes/expense';
+import langchainRoutes from './routes/langchain';
 import sampleRoutes from './routes/sample';
 import sampleviewingclientRoutes from './routes/sampleviewingclient';
 import categoriesRoutes from './routes/categories';
@@ -31,6 +32,7 @@ import balanceRoutes from './routes/balance';
 import inventoryRoutes from './routes/inventory';
 import transactionRoutes from './routes/transaction';
 import dashboardRoutes from './routes/dashboard';
+import webhookProxyRoutes from './routes/webhookProxy'; // Add this import
 
 
 const app = express();
@@ -64,6 +66,7 @@ app.use('/api/buyers', buyersRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/notification', notificationRoutes);
 app.use('/api/expense', expensesRoutes);
+app.use('/api/bot', langchainRoutes)
 app.use('/api/sample', sampleRoutes);
 app.use('/api/sampleviewingclient', sampleviewingclientRoutes);
 app.use('/api/systemsettings', systemsettingsRoutes);
@@ -73,6 +76,8 @@ app.use('/api/stripe', stripesRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/transaction', transactionRoutes);
 app.use("/api/dashboard", dashboardRoutes)
+app.use('/api/webhook-proxy', webhookProxyRoutes); // Add the new proxy route
+
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

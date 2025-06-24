@@ -3,8 +3,64 @@ import Expense, { IExpense } from '../models/Expense'; // adjust path if needed
 import mongoose from 'mongoose';
 import { createActivity } from './activity';
 import { authenticateJWT } from '../middlewares/authMiddleware';
+import Category from '../models/Category';
 
 const router = express.Router();
+
+// POST a new expense
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const {
+      user_id,
+      user_created_by_id,
+      category_id,
+      category_name,
+      amount,
+      description = `Expenses from bot ${amount}`,
+    } = req.body;
+
+    let finalCategoryId = category_id;
+
+    if (!finalCategoryId && category_name) {
+      const category = await Category.findOne({ name: category_name });
+      if (!category) {
+        return res.status(400).json({ error: 'Invalid category name provided' });
+      }
+      finalCategoryId = category._id;
+    }
+
+    if (!finalCategoryId) {
+      return res.status(400).json({ error: 'Category ID or name is required' });
+    }
+
+    const expense: IExpense = new Expense({
+      user_id,
+      user_created_by_id,
+      category_id: finalCategoryId,
+      amount,
+      description,
+    });
+
+    await expense.save();
+
+    createActivity({
+      user_id,
+      user_created_by: user_created_by_id,
+      action: 'create',
+      resource_type: 'expenses',
+      page: 'expenses',
+      type: 'expense_created',
+      amount,
+      description,
+    });
+
+    res.status(201).json(expense);
+  } catch (err) {
+    console.log('Error creating expense:', err);
+    res.status(400).json({ error: 'Failed to create expense', details: err });
+  }
+});
+
 router.use(authenticateJWT);
 
 // GET expense by ID
@@ -59,43 +115,8 @@ router.get('/user/user_creator/:userid', async (req: Request, res: Response) => 
   }
 });
 
-// POST a new expense
-router.post('/', async (req: Request, res: Response) => {
-  try {
-    const {
-      user_id,
-      user_created_by_id,
-      category_id,
-      amount,
-      description,
-    } = req.body;
 
-    const expense: IExpense = new Expense({
-      user_id,
-      user_created_by_id,
-      category_id,
-      amount,
-      description,
-    });
 
-    await expense.save();
-    
-    createActivity({
-      user_id : user_id, 
-      user_created_by : user_created_by_id,
-      action : "create",
-      resource_type : "expenses",
-      page : "expenses",
-      type : "expense_created",
-      amount: amount, // used for financial activity
-      description : description,
-    })
-    res.status(201).json(expense);
-  } catch (err) {
-    console.log("",err)
-    res.status(400).json({ error: 'Failed to create expense', details: err });
-  }
-});
 
 
 export default router;
