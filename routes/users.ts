@@ -335,20 +335,21 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     // 3. Inventory Value: Sum over all Inventory documents (price * qty) for this user.
     const inventoryValueAgg = await Inventory.aggregate([
       { $match: { user_id: userObjectId } },
-      { 
-        $group: { 
-          _id: null, 
-          inventoryValue: { 
-            $sum: { 
-              $add: [ 
-                { $multiply: ["$price", "$qty"] }, 
-                { $multiply: [ { $ifNull: ["$shippingCost", 0] }, "$qty" ] }
-              ] 
-            } 
-          } 
-        } 
+      {
+        $group: {
+          _id: null,
+          inventoryValue: {
+            $sum: {
+              $multiply: [
+                { $add: ["$price", { $ifNull: ["$shippingCost", 0] }] },
+                "$qty"
+              ]
+            }
+          }
+        }
       }
     ]);
+    
     
     // Round inventory value to avoid floating point precision issues
     const rawInventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;

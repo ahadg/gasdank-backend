@@ -29,6 +29,7 @@ const SampleViewingClientSchema = new Schema({
       qty: { type: Number, required: true },
       unit: { type: String, required: true },
       price: { type: Number, required: true },
+      sale_price: { type: Number, required: true },
       shippingCost : {type : Number, required : true},
       status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
     },

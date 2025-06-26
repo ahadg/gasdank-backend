@@ -334,7 +334,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
       // Process each item for sale/return
       for (const item of items) {
         // Build description string
-        description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) ${('+ (🚚' + " " + (formatCurrency(item.shipping * item.qty)) + ")")} \n`;
+        description += `${item.qty} ${item.unit} of ${item?.name} (@ ${formatCurrency(item.sale_price || item?.price)}) \n`;
         
         // Create transaction item record
         const transactionItem = new TransactionItem({
@@ -396,7 +396,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
         buyer_id,
         type: transactionType,
         amount: transactionType === "sale" 
-          ? parseInt(sale_price + total_shipping) 
+          ? parseInt(sale_price) 
           : -parseInt(price + total_shipping),
         description
       });
