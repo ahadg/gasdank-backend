@@ -16,6 +16,7 @@ const ActivitySchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   user_created_by: { type: Schema.Types.ObjectId, ref: 'User' },
   transaction_id:  { type: Schema.Types.ObjectId, ref: 'Transaction' },
+  worker_id : { type: Schema.Types.ObjectId, ref: 'User' },
   buyer_id:  { type: Schema.Types.ObjectId, ref: 'Buyer' },
 
   action: { type: String, required: true }, // e.g., 'CREATE', 'UPDATE', 'DELETE', 'LOGIN'

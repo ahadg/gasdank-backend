@@ -8,10 +8,11 @@ import { createActivity } from './activity'
 const router = Router()
 router.use(authenticateJWT)
 
-// GET all sessions for a worker or user
+// GET all sessions for a user
 router.get('/', async (req: Request, res: Response) => {
   const { user_created_by } = req.query
-  console.log("user_created_by",user_created_by)
+  console.log("user_created_by", user_created_by)
+  
   if (!user_created_by || !mongoose.Types.ObjectId.isValid(user_created_by as string)) {
     return res.status(400).json({ error: 'Invalid or missing user_created_by ID' })
   }
@@ -25,17 +26,21 @@ router.get('/', async (req: Request, res: Response) => {
   }
 })
 
-// GET all sessions for a worker or user
+// GET all pending sessions for a worker
 router.get('/worker', async (req: Request, res: Response) => {
   const { user_id } = req.query
-  console.log("_worker_user_id",user_id)
+  console.log("_worker_user_id", user_id)
+  
   if (!user_id || !mongoose.Types.ObjectId.isValid(user_id as string)) {
-    return res.status(400).json({ error: 'Invalid or missing user_created_by ID' })
+    return res.status(400).json({ error: 'Invalid or missing user_id' })
   }
 
   try {
-    const sessions = await SampleViewingClient.find({ user_id, viewingStatus : "pending" }).populate("buyer_id")
-    console.log("sessions",sessions)
+    const sessions = await SampleViewingClient.find({ 
+      user_id, 
+      status: "pending" 
+    }).populate("buyer_id")
+    console.log("sessions", sessions)
     res.status(200).json(sessions)
   } catch (err: any) {
     console.error('Error fetching sessions:', err)
@@ -54,33 +59,26 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const itemsWithStatus = items.map((item: any) => ({
-      ...item,
-      status: 'pending',
-    }));
-
     const newSession = new SampleViewingClient({
       buyer_id,
       user_created_by,
       user_id,
-      items: itemsWithStatus,
-      viewingStatus: 'pending',
+      items,
+      status: 'pending',
       notes,
     });
 
     await newSession.save();
 
     const newActivity = await createActivity({
-      user_id : user_created_by, 
-      //user_created_by : user_created_by,
-      buyer_id : buyer_id,
-      action : "create",
-      resource_type : "sample",
-      resource_id : newSession?._id,
-      page : "sampleviewing",
-      type : "sample_viewing_assigned",
-      //amount: amount, // used for financial activity
-      description : `Assigned a new sample viewing session with ${items.length} item${items.length > 1 ? 's' : ''}`,
+      user_id: user_created_by, 
+      buyer_id: buyer_id,
+      action: "create",
+      resource_type: "sample",
+      resource_id: newSession?._id,
+      page: "sampleviewing",
+      type: "sample_viewing_assigned",
+      description: `Assigned a new sample viewing session with ${items.length} item${items.length > 1 ? 's' : ''}`,
     })
     
     try {
@@ -94,7 +92,7 @@ router.post('/', async (req: Request, res: Response) => {
         isRead: false
       });
 
-      // Save both notifications
+      // Save notification
       workerNotification.save()
 
       console.log('Notifications created successfully for buyer:', buyer_id, 'and worker:', user_id);
@@ -110,35 +108,25 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// PATCH replace full item list with new statuses
-// PATCH replace full item list with new statuses
-router.patch('/:sessionId/items', async (req: Request, res: Response) => {
+// PATCH update session status
+router.patch('/:sessionId/status', async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params
-    const { items } = req.body
+    const { status } = req.body
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Items array is required' })
+    if (!status || !['pending', 'accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be pending, accepted, or rejected' })
     }
 
     const session = await SampleViewingClient.findById(sessionId)
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
-    const updatedItems = session.items.map((item: any) => {
-      const updated = items.find((i: any) => i.productId.toString() === item.productId.toString())
-      return updated ? { ...item.toObject(), status: updated.status } : item
-    })
-
-    // Update items and mark as viewed
-    session.items = updatedItems
-    session.viewingStatus = 'viewed' // Always mark as viewed when items are updated
+    // Update session status
+    session.status = status
     await session.save()
 
     // Create activity log for the status update
     try {
-      const acceptedCount = updatedItems.filter((item: any) => item.status === 'accepted').length
-      const rejectedCount = updatedItems.filter((item: any) => item.status === 'rejected').length
-      
       await createActivity({
         user_id: req.user?.id,
         buyer_id: session.buyer_id,
@@ -147,7 +135,7 @@ router.patch('/:sessionId/items', async (req: Request, res: Response) => {
         resource_id: session._id,
         page: "sampleviewing",
         type: "sample_viewing_updated",
-        description: `Updated sample viewing session: ${acceptedCount} accepted, ${rejectedCount} rejected`
+        description: `Sample viewing session ${status}`
       })
     } catch (activityError) {
       console.error('Error creating activity:', activityError)
@@ -155,12 +143,12 @@ router.patch('/:sessionId/items', async (req: Request, res: Response) => {
     }
 
     res.status(200).json({ 
-      message: 'Item statuses updated successfully and session marked as viewed', 
+      message: `Session status updated to ${status} successfully`, 
       session: await SampleViewingClient.findById(sessionId).populate("buyer_id")
     })
   } catch (err: any) {
-    console.error('Error updating item statuses:', err)
-    res.status(500).json({ error: 'Failed to update item statuses', details: err.message })
+    console.error('Error updating session status:', err)
+    res.status(500).json({ error: 'Failed to update session status', details: err.message })
   }
 })
 

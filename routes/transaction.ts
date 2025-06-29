@@ -20,6 +20,7 @@ export const createlogs = (user:any,obj:any) => {
   createActivity({
     user_id : user?._id, 
     user_created_by : user?.user_created_by,
+    worker_id : obj?.worker_id,
     action : "create",
     resource_type : obj?.type,
     page : "transaction",
@@ -253,6 +254,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
       // Create logs for payment transaction
       createlogs(the_user, {
         buyer_id,
+        worker_id,
         transaction_id: transaction?._id,
         type: transactionType,
         amount: payment_direction === "received" ? Number(payment) : -Number(payment),
@@ -318,6 +320,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
       // Create logs for inventory addition
       createlogs(the_user, {
         buyer_id,
+        worker_id,
         type: transactionType,
         transaction_id: transaction?._id,
         amount: price + total_shipping,
@@ -394,6 +397,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
       createlogs(the_user, {
         transaction_id: transaction._id,
         buyer_id,
+        worker_id,
         type: transactionType,
         amount: transactionType === "sale" 
           ? parseInt(sale_price) 
@@ -719,6 +723,10 @@ router.get('/history/:buyer_id/:user_id', checkAccess("wholesale", "read"), asyn
       .populate({
         path: 'transactionpayment_id',
         model: 'TransactionPayment'
+      })
+      .populate({
+        path: 'sample_id',
+        model: 'Sample'
       })
       .sort({ created_at: 1 }); // Sort by date ascending
     

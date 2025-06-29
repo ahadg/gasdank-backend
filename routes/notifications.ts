@@ -24,7 +24,7 @@ export const createNotification = async (obj: any) => {
 }
 
 // Format phone number for Twilio (ensure it starts with country code)
-const formatPhoneNumber = (phone: string): string => {
+export const formatPhoneNumber = (phone: string): string => {
   if (!phone) return '';
   
   // Remove all non-digit characters

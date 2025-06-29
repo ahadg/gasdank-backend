@@ -112,6 +112,14 @@ router.post('/:user_id', async (req: Request, res: Response) => {
                     as: 'transaction_id'
                   }
                 },
+                {
+                  $lookup: {
+                    from: 'users', // <-- make sure this matches your collection name
+                    localField: 'worker_id',
+                    foreignField: '_id',
+                    as: 'worker'
+                  }
+                },
                 // Optionally, unwind to convert arrays to single objects.
                 { $unwind: { path: "$user_id", preserveNullAndEmptyArrays: true } },
                 { $unwind: { path: "$buyer_id", preserveNullAndEmptyArrays: true } }

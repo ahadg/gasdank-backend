@@ -10,10 +10,9 @@ export interface ISampleViewingClient extends Document {
     qty: number
     unit: string
     price: number
-    status: 'pending' | 'accepted' | 'rejected'
     shippingCost : number
   }[]
-  viewingStatus: 'pending' | 'viewed'
+  status:  'pending' | 'accepted' | 'rejected'
   sentAt: Date
   notes?: string
 }
@@ -31,10 +30,10 @@ const SampleViewingClientSchema = new Schema({
       price: { type: Number, required: true },
       sale_price: { type: Number, required: true },
       shippingCost : {type : Number, required : true},
-      status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
+      
     },
   ],
-  viewingStatus: { type: String, enum: ['pending', 'viewed'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
   sentAt: { type: Date, default: Date.now },
   notes: { type: String },
 })

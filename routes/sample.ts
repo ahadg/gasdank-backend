@@ -7,7 +7,7 @@ import Inventory, { generateProductId } from '../models/Inventory';
 import mongoose from 'mongoose';
 import User from '../models/User';
 import Buyer from '../models/Buyer';
-import { twilioClient } from './notifications';
+import { formatPhoneNumber, twilioClient } from './notifications';
 import { createlogs, formatCurrency } from './transaction';
 import TransactionItem from '../models/TransactionItem';
 import Transaction from '../models/Transaction';
@@ -66,24 +66,62 @@ router.post('/', async (req: Request, res: Response) => {
     });
 
     await newSample.save();
+    const user = await User.findById(user_id);
+    const transaction = new Transaction({
+      user_id: (user?.role == "admin" || user?.role == "superadmin") ? user_id : user.created_by ,
+      buyer_id: buyer_id,
+      worker_id: user?.role == "user"  ? user_id : null, // fallback to user_id if no worker_id
+      type: "sample_recieved",
+      notes: `Sample Recieved `,
+      payment_method: "Credit", // or whatever default you prefer
+      price: 0, // will be calculated from products
+      payment_direction: "given", // since we're adding to buyer's debt
+      total_shipping: 0,
+      profit: 0,
+      sample_id : newSample?._id,
+      items: [] // start with empty items array
+    });
 
-    // Create notification for the buyer
-    // try {
-    //   const notification = new Notification({
-    //     user_id: buyer_id, // recipient (buyer)
-    //     actorId: user_id,  // person who triggered it (seller/user)
-    //     type: 'sample_created',
-    //     message: `A new sample with ${products.length} product${products.length > 1 ? 's' : ''} has been sent to you`,
-    //     activityId: newSample._id, // reference to the sample
-    //     isRead: false
-    //   });
+    let totalPrice = 0;
+    let totalPriceWithShipping = 0;
+    let totalShipping = 0;
+    let description = '';
 
-    //   await notification.save();
-    //   console.log('Notification created successfully for buyer:', buyer_id);
-    // } catch (notificationError) {
-    //   console.error('Error creating notification:', notificationError);
-    //   // Don't fail the entire request if notification fails
-    // }
+    for (const product of products) {
+      const shipping_per_unit = product.shippingCost
+      // console.log({
+      //   shippingCost: product.shippingCost,
+      //   shippingPerUnit: product?.shippingPerUnit
+      // })
+      console.log("shipping_per_unit",shipping_per_unit)
+      const productTotalPrice = product.price * product.qty;
+      let productTotalShipping = Number(product.shippingCost).toFixed(2);
+      
+      // Build description string
+      description += `${product.qty} ${product.unit} of ${product.name} (@ ${formatCurrency(product.price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
+      
+      // Add to totals
+      totalPrice += productTotalPrice;
+      totalPriceWithShipping += (Number(product.price) + product.shippingCost) * product.qty;
+      totalShipping +=  Number(productTotalShipping);
+    }
+
+    transaction.price = totalPrice;
+    transaction.total_shipping = Number(totalShippingCost).toFixed(2);
+    const roundBalance = (totalPriceWithShipping).toFixed(2);
+    console.log("totalPriceWithShipping",totalPriceWithShipping)
+    await Buyer.findByIdAndUpdate(buyer_id, { 
+      $inc: { currentBalance: -roundBalance } 
+    });
+    await transaction.save();
+
+    createlogs(user, {
+      buyer_id: buyer_id,
+      type: "sample_recieved",
+      transaction_id: transaction._id,
+      amount: (totalPrice),
+      description: description.trim(),
+    });
 
     res.status(201).json(newSample);
   } catch (err: any) {
@@ -97,7 +135,7 @@ router.post('/:id/accept', async (req, res) => {
   try {
     const sample = await Sample.findById(req.params.id);
     const user = await User.findById(sample?.user_id);
-    
+    let transaction = await Transaction.find({sample_id : req.params.id});
     if (!sample) {
       return res.status(404).json({ error: 'Sample not found' });
     }
@@ -109,19 +147,20 @@ router.post('/:id/accept', async (req, res) => {
     // ============================================================================
     // CREATE TRANSACTION FOR INVENTORY ADDITION
     // ============================================================================
-    const transaction = new Transaction({
-      user_id: (user?.role == "admin" || user?.role == "superadmin") ? sample.user_id : sample.created_by ,
-      buyer_id: sample.buyer_id,
-      worker_id: user?.role == "user"  ? sample.user_id : null, // fallback to user_id if no worker_id
-      type: "inventory_addition",
-      notes: `Inventory addition from accepted sample`,
-      payment_method: "Credit", // or whatever default you prefer
-      price: 0, // will be calculated from products
-      payment_direction: "given", // since we're adding to buyer's debt
-      total_shipping: 0,
-      profit: 0,
-      items: [] // start with empty items array
-    });
+    // const transaction = new Transaction({
+    //   user_id: (user?.role == "admin" || user?.role == "superadmin") ? sample.user_id : sample.created_by ,
+    //   buyer_id: sample.buyer_id,
+    //   worker_id: user?.role == "user"  ? sample.user_id : null, // fallback to user_id if no worker_id
+    //   type: "inventory_addition",
+    //   notes: `Inventory addition from accepted sample`,
+    //   payment_method: "Credit", // or whatever default you prefer
+    //   price: 0, // will be calculated from products
+    //   payment_direction: "given", // since we're adding to buyer's debt
+    //   total_shipping: 0,
+    //   profit: 0,
+    //   sample_id : sample?._id,
+    //   items: [] // start with empty items array
+    // });
 
     //await transaction.save();
     console.log("step _ 1")
@@ -160,14 +199,14 @@ router.post('/:id/accept', async (req, res) => {
 
       // Create transaction item record
       const transactionItem = new TransactionItem({
-        transaction_id: transaction._id,
+        transaction_id: transaction[0]._id,
         inventory_id: inventoryItem._id,
         user_id: sample.user_id,
         buyer_id: sample.buyer_id,
         qty: product.qty,
         measurement: 1, // assuming 1:1 measurement for samples
         shipping: shipping_per_unit,
-        type: "inventory_addition",
+        type: "sample_addition",
         unit: product.unit,
         price: product.price,
         sale_price: product.price, // assuming sale_price equals price for samples
@@ -191,47 +230,47 @@ router.post('/:id/accept', async (req, res) => {
     // ============================================================================
     // UPDATE TRANSACTION WITH CALCULATED VALUES
     // ============================================================================
-    const roundBalance = (totalPriceWithShipping).toFixed(2);
+    // const roundBalance = (totalPriceWithShipping).toFixed(2);
     
-    transaction.price = totalPrice;
-    transaction.total_shipping = Number(sample?.totalShippingCost).toFixed(2);
-    transaction.items = transactionItemIds;
-    await transaction.save();
+    // transaction.price = totalPrice;
+    // transaction.total_shipping = Number(sample?.totalShippingCost).toFixed(2);
+    // transaction.items = transactionItemIds;
+    await Transaction.findOneAndUpdate({sample_id : req.params.id},{items : transactionItemIds});
 
-    // ============================================================================
-    // UPDATE BUYER BALANCE
-    // ============================================================================
-    await Buyer.findByIdAndUpdate(sample.buyer_id, { 
-      $inc: { currentBalance: -roundBalance } 
-    });
+    // // ============================================================================
+    // // UPDATE BUYER BALANCE
+    // // ============================================================================
+    // await Buyer.findByIdAndUpdate(sample.buyer_id, { 
+    //   $inc: { currentBalance: -roundBalance } 
+    // });
 
     // ============================================================================
     // CREATE LOGS
     // ============================================================================
     createlogs(user, {
       buyer_id: sample.buyer_id,
-      type: "inventory_addition",
-      transaction_id: transaction._id,
-      amount: parseFloat(roundBalance),
+      type: "sample_inventory_addition",
+      transaction_id: transaction[0]._id,
+      amount: (totalPriceWithShipping),
       description: description.trim(),
     });
 
     // ============================================================================
     // UPDATE SAMPLE STATUS
     // ============================================================================
-    sample.status = 'accepted';
-    sample.transaction_id = transaction._id; // Link sample to transaction if your schema supports it
-    await sample.save();
+     sample.status = 'accepted';
+     sample.transaction_id = transaction[0]._id; // Link sample to transaction if your schema supports it
+     await sample.save();
 
     // ============================================================================
     // SUCCESS RESPONSE
     // ============================================================================
     res.status(200).json({ 
       message: 'Sample accepted and inventory created successfully',
-      transaction_id: transaction._id,
+      //transaction_id: transaction._id,
       sample_id: sample._id,
       inventory_items_created: sample.products.length,
-      total_amount: roundBalance
+      //total_amount: roundBalance
     });
 
   } catch (error) {
@@ -243,6 +282,7 @@ router.post('/:id/accept', async (req, res) => {
 // POST /api/samples/:id/return
 router.post('/:id/return', async (req, res) => {
   const sample = await Sample.findById(req.params.id)
+  const prev_transaction = await Transaction.find({sample_id : req.params.id})
   if (!sample) return res.status(404).json({ error: 'Sample not found' })
    
   const buyer = await Buyer.findById(sample?.buyer_id)
@@ -251,11 +291,62 @@ router.post('/:id/return', async (req, res) => {
   const productList = sample.products.map((product: any) => {
     return `${product.name} (${product.qty} ${product.unit})`
   }).join(', ')
+  // {
+  //   _id: new ObjectId("685fd223a92f28d9d4481d4b"),
+  //   user_id: new ObjectId("6818fce5b2ca3e2d8df7e158"),
+  //   buyer_id: new ObjectId("68544f4c20aef3c79d03db44"),
+  //   worker_id: null,
+  //   sample_id: new ObjectId("685fd222a92f28d9d4481d47"),
+  //   payment_direction: 'given',
+  //   payment_method: 'Credit',
+  //   type: 'sample_recieved',
+  //   notes: 'Sample Recieved ',
+  //   price: 40,
+  //   total_shipping: 10,
+  //   profit: 0,
+  //   items: [],
+  //   edited: false,
+  //   created_at: 2025-06-28T11:29:39.256Z,
+  //   updated_at: 2025-06-28T11:29:39.256Z,
+  //   prevValues: [],
+  //   __v: 0
+  // }
+  console.log("prev_transaction",req.params.id,prev_transaction)
+  const user = await User.findById(sample?.user_id);
+
+  const transaction = new Transaction({
+    user_id : prev_transaction?.[0]?.user_id,
+    buyer_id : prev_transaction?.[0]?.buyer_id,
+    worker_id : prev_transaction?.[0]?.worker_id,
+    sample_id : prev_transaction?.[0]?.sample_id,
+    payment_direction : prev_transaction?.[0]?.payment_direction,
+    price : prev_transaction?.[0]?.price,
+    total_shipping : prev_transaction?.[0]?.total_shipping,
+    profit : prev_transaction?.[0]?.profit,
+    type: "sample_returned",
+    notes: `Sample Returned `,
+    payment_method: "Debit", // or whatever default you prefer
+  });
+  const priceWithShipping = sample?.products?.reduce((sum : any,product: any) => sum + (product.shippingCost + product?.price) * product.qty, 0)
+  await Buyer.findByIdAndUpdate(prev_transaction?.[0]?.buyer_id, { 
+    $inc: { currentBalance: priceWithShipping } 
+  });
+
+  await transaction.save()
+  createlogs(user, {
+    buyer_id: sample?.buyer_id,
+    type: "sample_return",
+    transaction_id: transaction._id,
+    amount: (prev_transaction[0]?.price),
+    description: productList,
+  });
+
   
   // Calculate total quantity and items
   const totalItems = sample.products.length
   const totalQty = sample.products.reduce((sum: number, product: any) => sum + product.qty, 0)
-  
+  sample.status = 'returned'
+  await sample.save()
   // Create comprehensive SMS message
   let smsBody = `Hi! Your sample order has been returned.\n\nProducts: ${productList}`
   
@@ -264,15 +355,18 @@ router.post('/:id/return', async (req, res) => {
   }
   
   smsBody += `\n\nPlease contact us if you have any questions.`
-  
-  const smsResult = await twilioClient.messages.create({
-    body: smsBody,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    to: buyer.phone
-  });
-   
-  sample.status = 'returned'
-  await sample.save()
+  try {
+    const smsResult = await twilioClient.messages.create({
+      body: smsBody,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: formatPhoneNumber(buyer.phone)
+    });
+      
+  } catch (error) {
+    console.log('error',error)
+  }
+
+
    
   res.status(200).json({ message: 'Returned' })
 })

@@ -88,6 +88,7 @@ const TransactionSchema: Schema = new Schema({
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
   worker_id: { type: Schema.Types.ObjectId, ref: 'User'},
   transactionpayment_id: { type: Schema.Types.ObjectId, ref: 'TransactionPayment' },
+  sample_id :  { type: Schema.Types.ObjectId, ref: 'Sample'},
   payment_direction: { type: String },
   payment_method: { type: String },
   type: { type: String, default: "sale" },
