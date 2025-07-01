@@ -9,6 +9,7 @@ import checkAccess from '../middlewares/accessMiddleware';
 import User from '../models/User';
 import moment from 'moment';
 import { createActivity } from './activity';
+import { createNotification } from './notifications';
 
 
 const router = Router();
@@ -371,6 +372,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
         if (transactionType === "sale") {
           const saleAmount = (item.sale_price * item.measurement * item.qty).toFixed(2) 
           //+ (item.qty * item?.shipping);
+
           console.log("saleAmount",saleAmount);
           await Buyer.findByIdAndUpdate(buyer_id, { 
             $inc: { currentBalance: saleAmount } 
@@ -382,11 +384,21 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
             $inc: { currentBalance: returnAmount.toFixed(2) } 
           });
         }
-
+        console.log("qtyChange",qtyChange)
         // Update the inventory quantity
         await Inventory.findByIdAndUpdate(item.inventory_id, { 
           $inc: { qty: qtyChange } 
         });
+        const inventory = await Inventory.findById(item.inventory_id)
+        // check qtyleft in inventory is 0 then send notificaiton to admin
+        if (inventory?.qty < 4) {
+          createNotification({
+            user_id,
+            type: "product_low_quantity",
+            message: `Inventory alert: The product "${inventory.name}" is out of stock or has very low quantity.`,
+          });
+        }        
+          // 
       }
 
       // Update transaction with item IDs

@@ -28,26 +28,30 @@ router.get('/lowInventory', checkAccess("reports","read"),async (req: Request, r
 });
 
 // GET /api/inventory/:userid
-router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
+router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, res: Response) => {
   try {
     const { userid } = req.params;
-    const { category, page, limit } = req.query;
+    const { category, page, limit, qty } = req.query;
     
-    // Convert page and limit to numbers (default values: page 1, limit 10)
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    // Build the query: always filter by user_id, add category filter if provided.
     const query: any = { user_id: userid };
+
     if (category) {
-      query.category =  category;
+      query.category = category;
     }
 
-    // Get total number of matching documents (for pagination metadata)
+    if (qty === 'gt0') {
+      query.qty = { $gt: 0 };
+    }
+
     const totalProducts = await Inventory.countDocuments(query);
-    // Fetch paginated results
-    const products = await Inventory.find(query).skip(skip).limit(limitNum).populate("category");
+    const products = await Inventory.find(query)
+      .skip(skip)
+      .limit(limitNum)
+      .populate("category");
 
     res.status(200).json({
       page: pageNum,
@@ -59,6 +63,7 @@ router.get('/:userid',checkAccess("inventory","read"), async (req: Request, res:
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // GET /api/inventory/:userid/:buyerid
 router.get('/:userid/inventory/:buyerid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
@@ -72,8 +77,9 @@ router.get('/:userid/inventory/:buyerid',checkAccess("inventory","read"), async 
     const skip = (pageNum - 1) * limitNum;
 
     // Build the query: always filter by user_id, add category filter if provided.
-    const query: any = { user_id: userid,
-      // buyer_id : buyerid 
+    const query: any = { 
+      user_id: userid,
+      qty: { $gt: 0 } // Only products with quantity > 0
       };
     if (category) {
       query.category =  category;
