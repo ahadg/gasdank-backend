@@ -267,7 +267,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
     // ============================================================================
     // HANDLE INVENTORY ADDITION TRANSACTIONS
     // ============================================================================
-    } else if (transactionType === "inventory_addition") {
+    } else if (transactionType === "inventory_addition" || transactionType === "restock") {
       const transactionItemIds: { transactionitem_id: any }[] = [];
       let description = '';
 
@@ -296,6 +296,11 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
         // Collect the TransactionItem _id
         transactionItemIds.push({ transactionitem_id: transactionItem._id });
         console.log("transactionType", transactionType);
+        if(transactionType === "restock") {
+          await Inventory.findByIdAndUpdate(item.inventory_id, { 
+            $inc: { qty: item.qty } 
+          });
+        }
       }
 
       // Calculate total shipping value
@@ -313,6 +318,7 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
       await Buyer.findByIdAndUpdate(buyer_id, { 
         $inc: { currentBalance: -roundBalance } 
       });
+      //
 
       // Update transaction with item IDs
       transaction.items = transactionItemIds;
