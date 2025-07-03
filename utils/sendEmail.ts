@@ -1,7 +1,9 @@
 import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 
+const apiKey = process.env.MAILSEND_API_KEY;
+if (!apiKey) throw new Error("MAILSEND_API_KEY is not set");
 const mailerSend = new MailerSend({
-  apiKey: 'mlsn.008ef80b612d99017a21ce3c5ecbfe6946f817ede08049b22ece3147ba3cc360',
+  apiKey,
 });
 
 
