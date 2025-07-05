@@ -276,44 +276,117 @@ function getToolCalls(message: BaseMessage): any[] {
   return [];
 }
 
+// FIXED: Function to deduplicate messages
+function deduplicateMessages(messages: BaseMessage[]): BaseMessage[] {
+  const seen = new Set();
+  const deduplicated: BaseMessage[] = [];
+  
+  for (const message of messages) {
+    // Create a unique key for each message
+    let key: string;
+    if (message instanceof HumanMessage) {
+      key = `human:${message.content}`;
+    } else if (message instanceof AIMessage) {
+      const toolCalls = hasToolCalls(message) ? JSON.stringify(getToolCalls(message)) : '';
+      key = `ai:${message.content}:${toolCalls}`;
+    } else if (message instanceof ToolMessage) {
+      key = `tool:${message.tool_call_id}:${message.name}:${message.content}`;
+    } else {
+      key = `${message.constructor.name}:${message.content}`;
+    }
+    
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduplicated.push(message);
+    }
+  }
+  
+  return deduplicated;
+}
+
+// FIXED: Function to validate and clean message sequence
+function validateAndCleanMessages(messages: BaseMessage[]): BaseMessage[] {
+  const cleaned = deduplicateMessages(messages);
+  const pendingToolCalls = new Map<string, any>();
+  const validatedMessages: BaseMessage[] = [];
+  
+  for (const message of cleaned) {
+    if (hasToolCalls(message)) {
+      // AI message with tool calls
+      validatedMessages.push(message);
+      const toolCalls = getToolCalls(message);
+      for (const toolCall of toolCalls) {
+        pendingToolCalls.set(toolCall.id, toolCall);
+      }
+    } else if (message instanceof ToolMessage && message.tool_call_id) {
+      // Tool response - only include if we have the corresponding tool call
+      if (pendingToolCalls.has(message.tool_call_id)) {
+        validatedMessages.push(message);
+        pendingToolCalls.delete(message.tool_call_id);
+      }
+    } else {
+      // Regular message
+      validatedMessages.push(message);
+    }
+  }
+  
+  return validatedMessages;
+}
+
 // Define the agent function
 async function callModel(state: AgentState): Promise<Partial<AgentState>> {
-  // Prepare messages for the LLM (exclude system message from state)
+  console.log("🤖 callModel - Processing", state.messages.length, "messages");
+  
+  // FIXED: Clean and validate messages before sending to LLM
+  const cleanedMessages = validateAndCleanMessages(state.messages);
+  
+  // Prepare messages for the LLM
   const messages = [
     { role: "system", content: systemMessage },
-    ...state.messages
+    ...cleanedMessages
   ];
   
   try {
+    console.log("🤖 callModel - llmWithTools_invoke", "passing_userId,sessionId");
     const response = await llmWithTools.invoke(messages, {
       configurable: {
         userId: state.userId,
         sessionId: state.sessionId
       }
     });
+    console.log("🤖 callModel - response received");
+    console.log("✅ Model response received, has tool calls:", hasToolCalls(response));
     
-    return { messages: [...state.messages, response] };
+    // FIXED: Return cleaned messages plus new response
+    return { messages: [...cleanedMessages, response] };
   } catch (error) {
-    console.error("Error calling model:", error);
+    console.error("❌ Error calling model:", error);
     const errorMessage = new AIMessage({
       content: "❌ Sorry, I encountered an error processing your request. Please try again."
     });
-    return { messages: [...state.messages, errorMessage] };
+    return { messages: [...cleanedMessages, errorMessage] };
   }
 }
 
 // Define the tool execution function
 async function callTools(state: AgentState): Promise<Partial<AgentState>> {
+  console.log("🔧 callTools - Executing tools");
+  
   const lastMessage = state.messages[state.messages.length - 1];
   
   if (!hasToolCalls(lastMessage)) {
+    console.log("⚠️ No tool calls found in last message");
     return { messages: state.messages };
   }
   
   const toolCalls = getToolCalls(lastMessage);
+  console.log("🛠️ Found", toolCalls.length, "tool calls");
+  
   const toolMessages: BaseMessage[] = [];
   
   for (const toolCall of toolCalls) {
+    console.log("⚙️ Executing tool:", toolCall.name);
+    
     try {
       let result: any;
       const toolConfig = {
@@ -350,52 +423,72 @@ async function callTools(state: AgentState): Promise<Partial<AgentState>> {
           };
       }
       
-      // Create proper ToolMessage response
-      toolMessages.push(new ToolMessage({
+      // FIXED: Create proper ToolMessage response with correct structure
+      const toolMessage = new ToolMessage({
         tool_call_id: toolCall.id,
         name: toolCall.name,
         content: JSON.stringify(result)
-      }));
+      });
+      
+      toolMessages.push(toolMessage);
+      console.log("✅ Tool executed successfully:", toolCall.name);
       
     } catch (error: unknown) {
+      console.error("❌ Tool execution error:", error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toolMessages.push(new ToolMessage({
+      const toolMessage = new ToolMessage({
         tool_call_id: toolCall.id,
         name: toolCall.name,
         content: JSON.stringify({ 
           success: false, 
           error: errorMessage 
         })
-      }));
+      });
+      toolMessages.push(toolMessage);
     }
   }
   
+  console.log("🔧 Tool execution complete, returning", toolMessages.length, "tool messages");
   return { messages: [...state.messages, ...toolMessages] };
 }
 
-// Define the conditional edge function
+// FIXED: Improved conditional edge function
 function shouldContinue(state: AgentState): string {
   const lastMessage = state.messages[state.messages.length - 1];
   
+  console.log("🔀 shouldContinue - Last message type:", lastMessage.constructor.name);
+  
+  // If the last message is an AI message with tool calls, go to tools
   if (hasToolCalls(lastMessage)) {
+    console.log("➡️ Going to tools");
     return "tools";
   }
   
-  // After tools execute, we should go back to the agent
+  // If the last message is a tool message, we need to go back to the agent
   if (lastMessage instanceof ToolMessage) {
+    console.log("➡️ Tool message received, going back to agent");
     return "agent";
   }
   
-  // End if it's a regular AI message without tool calls
+  // If it's a regular AI message without tool calls, we're done
+  if (lastMessage instanceof AIMessage) {
+    console.log("🏁 Ending conversation - AI response without tool calls");
+    return END;
+  }
+  
+  // Default case - should not happen
+  console.log("🏁 Ending conversation - default case");
   return END;
 }
 
-// Create the state graph with proper channel definitions
+// FIXED: Create the state graph with proper channel definitions
 const workflow = new StateGraph<AgentState>({
   channels: {
     messages: {
       reducer: (current: BaseMessage[], update: BaseMessage[]) => {
-        return [...current, ...update];
+        // FIXED: Properly merge messages without duplication
+        const combined = [...current, ...update];
+        return validateAndCleanMessages(combined);
       },
       default: () => []
     },
@@ -414,7 +507,6 @@ const workflow = new StateGraph<AgentState>({
   .addEdge(START, "agent")
   .addConditionalEdges("agent", shouldContinue, {
     tools: "tools",
-    agent: "agent",
     [END]: END
   })
   .addEdge("tools", "agent");
@@ -427,43 +519,25 @@ const conversationMemory = new Map<string, BaseMessage[]>();
 
 // Function to clean up conversation history
 function cleanConversationHistory(messages: BaseMessage[]): BaseMessage[] {
-  const cleaned: BaseMessage[] = [];
+  // Keep only the last 10 complete exchanges to prevent memory bloat
+  const maxMessages = 20;
   
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    
-    // Always keep human messages
-    if (message instanceof HumanMessage) {
-      cleaned.push(message);
-      continue;
-    }
-    
-    // For AI messages with tool calls, ensure we have matching tool responses
-    if (hasToolCalls(message)) {
-      cleaned.push(message);
-      const toolCalls = getToolCalls(message);
-      const toolCallIds = new Set(toolCalls.map(tc => tc.id));
-      
-      // Look ahead for matching tool responses
-      let j = i + 1;
-      while (j < messages.length && toolCallIds.size > 0) {
-        const nextMsg = messages[j];
-        if (nextMsg instanceof ToolMessage && toolCallIds.has(nextMsg.tool_call_id)) {
-          cleaned.push(nextMsg);
-          toolCallIds.delete(nextMsg.tool_call_id);
-        }
-        j++;
-      }
-      
-      // Skip processed messages
-      i = j - 1;
-    } else if (message instanceof AIMessage || message instanceof ToolMessage) {
-      // Only keep if it's part of a valid sequence
-      cleaned.push(message);
+  if (messages.length <= maxMessages) {
+    return validateAndCleanMessages(messages);
+  }
+  
+  // Find a good cutoff point (after a complete exchange)
+  let cutoffIndex = messages.length - maxMessages;
+  
+  // Move cutoff to after a human message to maintain conversation flow
+  for (let i = cutoffIndex; i < messages.length; i++) {
+    if (messages[i] instanceof HumanMessage) {
+      cutoffIndex = i;
+      break;
     }
   }
   
-  return cleaned;
+  return validateAndCleanMessages(messages.slice(cutoffIndex));
 }
 
 // Main chat endpoint
@@ -478,28 +552,31 @@ router.post('/chat', async (req: Request, res: Response) => {
       });
     }
 
+    console.log("💬 New chat request:", { userId, sessionID, message: userMessage.substring(0, 50) + "..." });
+
     // Get conversation history
     const conversationKey = `${userId}-${sessionID}`;
     let previousMessages = conversationMemory.get(conversationKey) || [];
 
-    // Clean up any inconsistent message history
+    // Clean up conversation history
     previousMessages = cleanConversationHistory(previousMessages);
 
     // Add user message
     const newUserMessage = new HumanMessage({ content: userMessage });
-    const allMessages = [...previousMessages, newUserMessage];
+    const initialMessages = [...previousMessages, newUserMessage];
 
-    // Keep only last 20 messages to maintain context but avoid token limits
-    const contextMessages = allMessages.slice(-20);
+    console.log("📝 Starting with", initialMessages.length, "messages");
 
     // Run the graph
     const result = await app.invoke({
-      messages: contextMessages,
+      messages: initialMessages,
       userId,
       sessionId: sessionID
     });
 
-    // Get the final response
+    console.log("🎯 Graph execution complete, final messages:", result.messages.length);
+
+    // Get the final response (last AI message without tool calls)
     const finalMessages = result.messages;
     const lastAssistantMessage = finalMessages
       .filter((msg: BaseMessage) => msg instanceof AIMessage && !hasToolCalls(msg))
@@ -507,9 +584,10 @@ router.post('/chat', async (req: Request, res: Response) => {
 
     const response = lastAssistantMessage?.content || "I couldn't process your request.";
 
-    // Store updated conversation (clean it first)
-    const cleanedFinalMessages = cleanConversationHistory(finalMessages);
-    conversationMemory.set(conversationKey, cleanedFinalMessages);
+    // Store updated conversation
+    conversationMemory.set(conversationKey, finalMessages);
+
+    console.log("✅ Chat completed successfully");
 
     // Return response
     res.json({
@@ -520,7 +598,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     });
 
   } catch (error: any) {
-    console.error('AI Assistant Error:', error);
+    console.error('❌ AI Assistant Error:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -560,16 +638,3 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
 });
 
 export default router;
-
-// Package.json additions needed:
-/*
-{
-  "dependencies": {
-    "@langchain/core": "^0.2.0",
-    "@langchain/openai": "^0.2.0",
-    "@langchain/langgraph": "^0.0.20",
-    "@langchain/community": "^0.2.0",
-    "zod": "^3.22.0"
-  }
-}
-*/

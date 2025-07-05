@@ -7,6 +7,23 @@ import User from '../models/User';
 const router = Router();
 router.use(authenticateJWT);
 
+// GET /api/inventory/next-reference-number - Get next available reference number
+router.get('/next-reference-number', checkAccess("inventory", "read"), async (req: Request, res: Response) => {
+  try {
+    const lastProduct = await Inventory.findOne({})
+      .sort({ reference_number: -1 })
+      .select('reference_number');
+    //***** InventorySchema.pre('save' check in inventory Model
+    const lastRef = lastProduct?.reference_number;
+    const nextReferenceNumber = (typeof lastRef === 'number' && !isNaN(lastRef)) ? lastRef + 1 : 1;
+    
+    res.status(200).json({ nextReferenceNumber });
+  } catch (error: any) {
+    console.error('Error getting next reference number:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/inventory/outOfStock
 router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res: Response) => {
   try {

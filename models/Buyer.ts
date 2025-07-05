@@ -18,8 +18,12 @@ export interface IBuyer extends Document {
 const BuyerSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
-  email: { type: String, required: true },
+  lastName: { type: String, 
+  //  required: true 
+  },
+  email: { type: String, 
+   // required: true 
+  },
   phone: { type: String },
   status: {type : Boolean, default : true},
 //   balance: { type: Number, default: 0 },

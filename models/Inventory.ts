@@ -90,7 +90,9 @@ InventorySchema.pre('save', async function(next) {
         //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
         const reference_number = await getNextReferenceNumber()
         this.reference_number = reference_number
-        this.name = `#${reference_number} ${this.name}`
+       
+      }else {
+         this.name = `#${this.reference_number} ${this.name}`
       }
     }
     
