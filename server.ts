@@ -24,7 +24,7 @@ import systemsettingsRoutes from './routes/systemsetting';
 import activityRoutes from './routes/activity';
 import notificationRoutes from './routes/notifications';
 import expensesRoutes from './routes/expense';
-import langchainRoutes from './routes/langchain';
+import langchainRoutes from './routes/langgraph';
 import sampleRoutes from './routes/sample';
 import sampleviewingclientRoutes from './routes/sampleviewingclient';
 import categoriesRoutes from './routes/categories';

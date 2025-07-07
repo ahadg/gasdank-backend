@@ -4,11 +4,8 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
-import { tool } from "@langchain/core/tools";
-import { z } from "zod";
 import express, { Request, Response } from 'express';
-import mongoose from 'mongoose';
-
+import { update_balance_buyer, addBuyerTool, addExpenseTool, addInventoryTool, findBuyersTool, findExpensesTool, findInventoryTool, updateBuyerTool } from "../utils/langchainTools";
 const router = express.Router();
 
 // Initialize OpenAI Chat Model
@@ -25,178 +22,17 @@ interface AgentState {
   sessionId: string;
 }
 
-// Define tools using LangChain's tool decorator
-const findInventoryTool = tool(
-  async (input: { query?: object }, config) => {
-    const userId = config?.configurable?.userId;
-    if (!userId) throw new Error("User ID required");
-    
-    const userObjectId = new mongoose.Types.ObjectId(userId);
-    const query = { ...input.query, user_id: userObjectId };
-    
-    try {
-      const results = await mongoose.model('Inventory').find(query);
-      return { success: true, data: results };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  {
-    name: "find_inventory",
-    description: "Find inventory/product items from database. Can search by product name, buyer, or other criteria.",
-    schema: z.object({
-      query: z.object({}).optional().describe("MongoDB query object to search inventory")
-    })
-  }
-);
-
-const findBuyersTool = tool(
-  async (input: { query?: object }, config) => {
-    const userId = config?.configurable?.userId;
-    if (!userId) throw new Error("User ID required");
-    
-    const userObjectId = new mongoose.Types.ObjectId(userId);
-    const query = { ...input.query, user_id: userObjectId };
-    
-    try {
-      const results = await mongoose.model('Buyer').find(query);
-      return { success: true, data: results };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  {
-    name: "find_buyers",
-    description: "Find buyers/clients from database. Can search by name, email, or other criteria.",
-    schema: z.object({
-      query: z.object({}).optional().describe("MongoDB query object to search buyers")
-    })
-  }
-);
-
-const findExpensesTool = tool(
-  async (input: { query?: object }, config) => {
-    const userId = config?.configurable?.userId;
-    if (!userId) throw new Error("User ID required");
-    
-    const userObjectId = new mongoose.Types.ObjectId(userId);
-    const query = { ...input.query, user_id: userObjectId };
-    
-    try {
-      const results = await mongoose.model('Expense').find(query);
-      return { success: true, data: results };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  {
-    name: "find_expenses",
-    description: "Find expenses from database. Can search by date range, category, or amount.",
-    schema: z.object({
-      query: z.object({}).optional().describe("MongoDB query object to search expenses")
-    })
-  }
-);
-
-const addBuyerTool = tool(
-  async (input: { firstName: string; lastName: string; email: string; phone?: string; balance: number }, config) => {
-    const userId = config?.configurable?.userId;
-    if (!userId) throw new Error("User ID required");
-    
-    try {
-      const response = await fetch('https://manapnl.com/api/buyers/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          ...input
-        })
-      });
-      const result = await response.json();
-      return { success: response.ok, data: result };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  {
-    name: "add_buyer",
-    description: "Add a new buyer/client to the system.",
-    schema: z.object({
-      firstName: z.string().describe("First name of the buyer"),
-      lastName: z.string().describe("Last name of the buyer"),
-      email: z.string().email().describe("Email address of the buyer"),
-      phone: z.string().optional().describe("Phone number of the buyer"),
-      balance: z.number().describe("Initial balance/outstanding amount for the buyer")
-    })
-  }
-);
-
-const updateBuyerTool = tool(
-  async (input: { identifier: string; firstName?: string; lastName?: string; email?: string; phone?: string; balance?: number }) => {
-    try {
-      const response = await fetch('https://manapnl.com/api/buyers/aiedit', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      });
-      const result = await response.json();
-      return { success: response.ok, data: result };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  {
-    name: "update_buyer",
-    description: "Update an existing buyer's information.",
-    schema: z.object({
-      identifier: z.string().describe("Identifier to find the buyer (email, firstName, or lastName)"),
-      firstName: z.string().optional().describe("Updated first name"),
-      lastName: z.string().optional().describe("Updated last name"),
-      email: z.string().email().optional().describe("Updated email address"),
-      phone: z.string().optional().describe("Updated phone number"),
-      balance: z.number().optional().describe("Updated balance amount")
-    })
-  }
-);
-
-const addExpenseTool = tool(
-  async (input: { category_name: string; amount: number }, config) => {
-    const userId = config?.configurable?.userId;
-    if (!userId) throw new Error("User ID required");
-    
-    try {
-      const response = await fetch('https://manapnl.com/api/expense', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          ...input
-        })
-      });
-      const result = await response.json();
-      return { success: response.ok, data: result };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  {
-    name: "add_expense",
-    description: "Add a new expense to the system.",
-    schema: z.object({
-      category_name: z.string().describe("Category name for the expense (e.g., Marketing, Transport, Packaging)"),
-      amount: z.number().positive().describe("Expense amount in dollars")
-    })
-  }
-);
 
 // Create tools array
 const tools = [
   findInventoryTool,
   findBuyersTool,
+  update_balance_buyer,
   findExpensesTool,
   addBuyerTool,
   updateBuyerTool,
-  addExpenseTool
+  addExpenseTool,
+  addInventoryTool
 ];
 
 // Bind tools to the LLM
@@ -222,10 +58,11 @@ You can process the following types of inputs:
    - Get inventory data
 
 2. BUYER/CLIENT MANAGEMENT
-   - Add new clients/buyers
-   - Update buyer balances
+   - Add new clients/buyers, if buyer has outstanding balance then convert postive number to negative
+   - Update buyer
    - Check client balances
    - Manage outstanding amounts
+   - Update Buyer Balance, recieved from a or give to client/buyer,
 
 3. EXPENSE TRACKING
    - Log new expenses
@@ -401,9 +238,14 @@ async function callTools(state: AgentState): Promise<Partial<AgentState>> {
         case 'find_inventory':
           result = await findInventoryTool.invoke(toolCall.args, toolConfig);
           break;
+        case 'add_inventory':
+          result = await addInventoryTool.invoke(toolCall.args, toolConfig);
+          break;
         case 'find_buyers':
           result = await findBuyersTool.invoke(toolCall.args, toolConfig);
           break;
+        case 'update_balance_buyer':
+          result = await update_balance_buyer.invoke(toolCall.args, toolConfig);
         case 'find_expenses':
           result = await findExpensesTool.invoke(toolCall.args, toolConfig);
           break;
