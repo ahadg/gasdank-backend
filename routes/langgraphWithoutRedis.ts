@@ -1,37 +1,12 @@
 // First, install the required packages:
-// npm install @langchain/core @langchain/openai @langchain/langgraph @langchain/community redis
+// npm install @langchain/core @langchain/openai @langchain/langgraph @langchain/community
 
 import { ChatOpenAI } from "@langchain/openai";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import express, { Request, Response } from 'express';
-import { createClient } from 'redis';
 import { update_balance_buyer, addBuyerTool, addExpenseTool, addInventoryTool, findBuyersTool, findExpensesTool, findInventoryTool, updateBuyerTool } from "../utils/langchainTools";
-
 const router = express.Router();
-
-// Initialize Redis client
-const redisClient = createClient({
-  url: 'redis://localhost:6379'
-});
-
-// Connect to Redis
-redisClient.on('error', (err : any) => {
-  console.error('Redis Client Error:', err);
-});
-
-redisClient.on('connect', () => {
-  console.log('✅ Connected to Redis');
-});
-
-// Connect to Redis (async)
-(async () => {
-  try {
-    await redisClient.connect();
-  } catch (error) {
-    console.error('❌ Failed to connect to Redis:', error);
-  }
-})();
 
 // Initialize OpenAI Chat Model
 const llm = new ChatOpenAI({
@@ -47,11 +22,6 @@ interface AgentState {
   sessionId: string;
 }
 
-// Storage interface
-interface StorageOptions {
-  useRedis: boolean;
-  redisExpiry?: number; // TTL in seconds (default: 1 hour)
-}
 
 // Create tools array
 const tools = [
@@ -142,152 +112,6 @@ function getToolCalls(message: BaseMessage): any[] {
   }
   return [];
 }
-
-// Function to serialize messages for Redis storage
-function serializeMessages(messages: BaseMessage[]): string {
-  const serialized = messages.map(msg => {
-    if (msg instanceof HumanMessage) {
-      return {
-        type: 'human',
-        content: msg.content,
-        id: msg.id
-      };
-    } else if (msg instanceof AIMessage) {
-      return {
-        type: 'ai',
-        content: msg.content,
-        id: msg.id,
-        tool_calls: hasToolCalls(msg) ? getToolCalls(msg) : undefined
-      };
-    } else if (msg instanceof ToolMessage) {
-      return {
-        type: 'tool',
-        content: msg.content,
-        id: msg.id,
-        tool_call_id: msg.tool_call_id,
-        name: msg.name
-      };
-    }
-    return {
-      type: 'unknown',
-      content: msg.content,
-      id: msg.id
-    };
-  });
-  
-  return JSON.stringify(serialized);
-}
-
-// Function to deserialize messages from Redis storage
-function deserializeMessages(serialized: string): BaseMessage[] {
-  try {
-    const parsed = JSON.parse(serialized);
-    
-    return parsed.map((msg: any) => {
-      switch (msg.type) {
-        case 'human':
-          return new HumanMessage({
-            content: msg.content,
-            id: msg.id
-          });
-        case 'ai':
-          const aiMsg = new AIMessage({
-            content: msg.content,
-            id: msg.id
-          });
-          if (msg.tool_calls) {
-            (aiMsg as any).tool_calls = msg.tool_calls;
-          }
-          return aiMsg;
-        case 'tool':
-          return new ToolMessage({
-            content: msg.content,
-            id: msg.id,
-            tool_call_id: msg.tool_call_id,
-            name: msg.name
-          });
-        default:
-          return new HumanMessage({
-            content: msg.content,
-            id: msg.id
-          });
-      }
-    });
-  } catch (error) {
-    console.error('Error deserializing messages:', error);
-    return [];
-  }
-}
-
-// Storage manager class
-class ConversationStorage {
-  private memoryStore = new Map<string, BaseMessage[]>();
-  
-  async getMessages(
-    conversationKey: string, 
-    options: StorageOptions
-  ): Promise<BaseMessage[]> {
-    if (options.useRedis) {
-      try {
-        const serialized = await redisClient.get(`conversation:${conversationKey}`);
-        if (serialized) {
-          console.log(`📖 Retrieved conversation from Redis: ${conversationKey}`);
-          return deserializeMessages(serialized);
-        }
-      } catch (error) {
-        console.error('❌ Redis get error:', error);
-        // Fallback to memory storage
-        return this.memoryStore.get(conversationKey) || [];
-      }
-    }
-    
-    console.log(`📖 Retrieved conversation from memory: ${conversationKey}`);
-    return this.memoryStore.get(conversationKey) || [];
-  }
-  
-  async saveMessages(
-    conversationKey: string, 
-    messages: BaseMessage[], 
-    options: StorageOptions
-  ): Promise<void> {
-    if (options.useRedis) {
-      try {
-        const serialized = serializeMessages(messages);
-        const expiry = options.redisExpiry || 3600; // Default 1 hour
-        await redisClient.setEx(`conversation:${conversationKey}`, expiry, serialized);
-        console.log(`💾 Saved conversation to Redis: ${conversationKey} (TTL: ${expiry}s)`);
-      } catch (error) {
-        console.error('❌ Redis save error:', error);
-        // Fallback to memory storage
-        this.memoryStore.set(conversationKey, messages);
-        console.log(`💾 Saved conversation to memory (fallback): ${conversationKey}`);
-      }
-    } else {
-      this.memoryStore.set(conversationKey, messages);
-      console.log(`💾 Saved conversation to memory: ${conversationKey}`);
-    }
-  }
-  
-  async clearConversation(
-    conversationKey: string, 
-    options: StorageOptions
-  ): Promise<void> {
-    if (options.useRedis) {
-      try {
-        await redisClient.del(`conversation:${conversationKey}`);
-        console.log(`🗑️ Cleared conversation from Redis: ${conversationKey}`);
-      } catch (error) {
-        console.error('❌ Redis delete error:', error);
-      }
-    }
-    
-    this.memoryStore.delete(conversationKey);
-    console.log(`🗑️ Cleared conversation from memory: ${conversationKey}`);
-  }
-}
-
-// Initialize storage manager
-const conversationStorage = new ConversationStorage();
 
 // FIXED: Function to deduplicate messages
 function deduplicateMessages(messages: BaseMessage[]): BaseMessage[] {
@@ -422,7 +246,6 @@ async function callTools(state: AgentState): Promise<Partial<AgentState>> {
           break;
         case 'update_balance_buyer':
           result = await update_balance_buyer.invoke(toolCall.args, toolConfig);
-          break;
         case 'find_expenses':
           result = await findExpensesTool.invoke(toolCall.args, toolConfig);
           break;
@@ -533,6 +356,9 @@ const workflow = new StateGraph<AgentState>({
 // Compile the graph
 const app = workflow.compile();
 
+// Memory store for conversations with proper typing
+const conversationMemory = new Map<string, BaseMessage[]>();
+
 // Function to clean up conversation history
 function cleanConversationHistory(messages: BaseMessage[]): BaseMessage[] {
   // Keep only the last 10 complete exchanges to prevent memory bloat
@@ -559,13 +385,7 @@ function cleanConversationHistory(messages: BaseMessage[]): BaseMessage[] {
 // Main chat endpoint
 router.post('/chat', async (req: Request, res: Response) => {
   try {
-    const { 
-      userMessage, 
-      userId, 
-      sessionID, 
-      useRedis = false, 
-      redisExpiry = 86400 // 60 seconds * 60 minutes * 24 hours = 86400 seconds
-    } = req.body;
+    const { userMessage, userId, sessionID } = req.body;
 
     if (!userMessage || !userId || !sessionID) {
       return res.status(400).json({
@@ -574,23 +394,11 @@ router.post('/chat', async (req: Request, res: Response) => {
       });
     }
 
-    console.log("💬 New chat request:", { 
-      userId, 
-      sessionID, 
-      useRedis, 
-      redisExpiry,
-      message: userMessage.substring(0, 50) + "..." 
-    });
-
-    // Storage options
-    const storageOptions: StorageOptions = {
-      useRedis,
-      redisExpiry
-    };
+    console.log("💬 New chat request:", { userId, sessionID, message: userMessage.substring(0, 50) + "..." });
 
     // Get conversation history
     const conversationKey = `${userId}-${sessionID}`;
-    let previousMessages = await conversationStorage.getMessages(conversationKey, storageOptions);
+    let previousMessages = conversationMemory.get(conversationKey) || [];
 
     // Clean up conversation history
     previousMessages = cleanConversationHistory(previousMessages);
@@ -619,7 +427,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     const response = lastAssistantMessage?.content || "I couldn't process your request.";
 
     // Store updated conversation
-    await conversationStorage.saveMessages(conversationKey, finalMessages, storageOptions);
+    conversationMemory.set(conversationKey, finalMessages);
 
     console.log("✅ Chat completed successfully");
 
@@ -628,8 +436,7 @@ router.post('/chat', async (req: Request, res: Response) => {
       success: true,
       response,
       userId,
-      sessionId: sessionID,
-      storageUsed: useRedis ? 'redis' : 'memory'
+      sessionId: sessionID
     });
 
   } catch (error: any) {
@@ -642,10 +449,10 @@ router.post('/chat', async (req: Request, res: Response) => {
   }
 });
 
-// Clear conversation endpoint
+// Optional: Add endpoint to clear conversation history
 router.post('/chat/clear', async (req: Request, res: Response) => {
   try {
-    const { userId, sessionID, useRedis = false } = req.body;
+    const { userId, sessionID } = req.body;
     
     if (!userId || !sessionID) {
       return res.status(400).json({
@@ -655,14 +462,11 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
     }
 
     const conversationKey = `${userId}-${sessionID}`;
-    const storageOptions: StorageOptions = { useRedis };
-    
-    await conversationStorage.clearConversation(conversationKey, storageOptions);
+    conversationMemory.delete(conversationKey);
 
     res.json({
       success: true,
-      message: 'Conversation history cleared',
-      storageUsed: useRedis ? 'redis' : 'memory'
+      message: 'Conversation history cleared'
     });
 
   } catch (error: any) {
@@ -673,39 +477,6 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
       message: error.message
     });
   }
-});
-
-// Health check endpoint
-router.get('/health', async (req: Request, res: Response) => {
-  try {
-    let redisStatus = 'disconnected';
-    try {
-      await redisClient.ping();
-      redisStatus = 'connected';
-    } catch (error) {
-      redisStatus = 'error';
-    }
-
-    res.json({
-      success: true,
-      status: 'healthy',
-      redis: redisStatus,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: 'Health check failed',
-      message: error.message
-    });
-  }
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
-  await redisClient.quit();
-  process.exit(0);
 });
 
 export default router;
