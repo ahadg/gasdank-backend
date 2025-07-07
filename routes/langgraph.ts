@@ -10,28 +10,47 @@ import { update_balance_buyer, addBuyerTool, addExpenseTool, addInventoryTool, f
 
 const router = express.Router();
 
-// Initialize Redis client
-const redisClient = createClient({
-  url: 'redis://localhost:6379'
-});
+// Check if Redis should be ignored
+const ignoreRedis = process.env.ignoreRedis === 'true';
+console.log(`🔧 Redis Configuration: ${ignoreRedis ? 'DISABLED' : 'ENABLED'}`);
 
-// Connect to Redis
-redisClient.on('error', (err : any) => {
-  console.error('Redis Client Error:', err);
-});
+// Initialize Redis client only if not ignored
+let redisClient: any = null;
+let redisConnected = false;
 
-redisClient.on('connect', () => {
-  console.log('✅ Connected to Redis');
-});
+if (!ignoreRedis) {
+  redisClient = createClient({
+    url: 'redis://localhost:6379'
+  });
 
-// Connect to Redis (async)
-(async () => {
-  try {
-    await redisClient.connect();
-  } catch (error) {
-    console.error('❌ Failed to connect to Redis:', error);
-  }
-})();
+  // Connect to Redis
+  redisClient.on('error', (err: any) => {
+    console.error('Redis Client Error:', err);
+    redisConnected = false;
+  });
+
+  redisClient.on('connect', () => {
+    console.log('✅ Connected to Redis');
+    redisConnected = true;
+  });
+
+  redisClient.on('disconnect', () => {
+    console.log('❌ Disconnected from Redis');
+    redisConnected = false;
+  });
+
+  // Connect to Redis (async)
+  (async () => {
+    try {
+      await redisClient.connect();
+    } catch (error) {
+      console.error('❌ Failed to connect to Redis:', error);
+      redisConnected = false;
+    }
+  })();
+} else {
+  console.log('⚠️ Redis connection skipped due to ignoreRedis=true');
+}
 
 // Initialize OpenAI Chat Model
 const llm = new ChatOpenAI({
@@ -227,7 +246,13 @@ class ConversationStorage {
     conversationKey: string, 
     options: StorageOptions
   ): Promise<BaseMessage[]> {
-    if (options.useRedis) {
+    // Force memory storage if Redis is ignored or not connected
+    if (ignoreRedis || !redisConnected || !options.useRedis) {
+      console.log(`📖 Retrieved conversation from memory: ${conversationKey}`);
+      return this.memoryStore.get(conversationKey) || [];
+    }
+    
+    if (options.useRedis && redisClient) {
       try {
         const serialized = await redisClient.get(`conversation:${conversationKey}`);
         if (serialized) {
@@ -237,6 +262,7 @@ class ConversationStorage {
       } catch (error) {
         console.error('❌ Redis get error:', error);
         // Fallback to memory storage
+        console.log(`📖 Retrieved conversation from memory (Redis fallback): ${conversationKey}`);
         return this.memoryStore.get(conversationKey) || [];
       }
     }
@@ -250,7 +276,16 @@ class ConversationStorage {
     messages: BaseMessage[], 
     options: StorageOptions
   ): Promise<void> {
-    if (options.useRedis) {
+    // Always save to memory as backup
+    this.memoryStore.set(conversationKey, messages);
+    
+    // Skip Redis if ignored or not connected
+    if (ignoreRedis || !redisConnected || !options.useRedis) {
+      console.log(`💾 Saved conversation to memory: ${conversationKey}`);
+      return;
+    }
+    
+    if (options.useRedis && redisClient) {
       try {
         const serialized = serializeMessages(messages);
         const expiry = options.redisExpiry || 3600; // Default 1 hour
@@ -258,12 +293,9 @@ class ConversationStorage {
         console.log(`💾 Saved conversation to Redis: ${conversationKey} (TTL: ${expiry}s)`);
       } catch (error) {
         console.error('❌ Redis save error:', error);
-        // Fallback to memory storage
-        this.memoryStore.set(conversationKey, messages);
-        console.log(`💾 Saved conversation to memory (fallback): ${conversationKey}`);
+        console.log(`💾 Saved conversation to memory (Redis fallback): ${conversationKey}`);
       }
     } else {
-      this.memoryStore.set(conversationKey, messages);
       console.log(`💾 Saved conversation to memory: ${conversationKey}`);
     }
   }
@@ -272,7 +304,16 @@ class ConversationStorage {
     conversationKey: string, 
     options: StorageOptions
   ): Promise<void> {
-    if (options.useRedis) {
+    // Always clear from memory
+    this.memoryStore.delete(conversationKey);
+    
+    // Skip Redis if ignored or not connected
+    if (ignoreRedis || !redisConnected || !options.useRedis) {
+      console.log(`🗑️ Cleared conversation from memory: ${conversationKey}`);
+      return;
+    }
+    
+    if (options.useRedis && redisClient) {
       try {
         await redisClient.del(`conversation:${conversationKey}`);
         console.log(`🗑️ Cleared conversation from Redis: ${conversationKey}`);
@@ -281,7 +322,6 @@ class ConversationStorage {
       }
     }
     
-    this.memoryStore.delete(conversationKey);
     console.log(`🗑️ Cleared conversation from memory: ${conversationKey}`);
   }
 }
@@ -577,14 +617,14 @@ router.post('/chat', async (req: Request, res: Response) => {
     console.log("💬 New chat request:", { 
       userId, 
       sessionID, 
-      useRedis, 
+      useRedis: useRedis && !ignoreRedis && redisConnected, 
       redisExpiry,
       message: userMessage.substring(0, 50) + "..." 
     });
 
-    // Storage options
+    // Storage options - force memory if Redis is ignored
     const storageOptions: StorageOptions = {
-      useRedis,
+      useRedis: useRedis && !ignoreRedis && redisConnected,
       redisExpiry
     };
 
@@ -629,7 +669,7 @@ router.post('/chat', async (req: Request, res: Response) => {
       response,
       userId,
       sessionId: sessionID,
-      storageUsed: useRedis ? 'redis' : 'memory'
+      storageUsed: storageOptions.useRedis ? 'redis' : 'memory'
     });
 
   } catch (error: any) {
@@ -655,14 +695,16 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
     }
 
     const conversationKey = `${userId}-${sessionID}`;
-    const storageOptions: StorageOptions = { useRedis };
+    const storageOptions: StorageOptions = { 
+      useRedis: useRedis && !ignoreRedis && redisConnected 
+    };
     
     await conversationStorage.clearConversation(conversationKey, storageOptions);
 
     res.json({
       success: true,
       message: 'Conversation history cleared',
-      storageUsed: useRedis ? 'redis' : 'memory'
+      storageUsed: storageOptions.useRedis ? 'redis' : 'memory'
     });
 
   } catch (error: any) {
@@ -678,18 +720,22 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
 // Health check endpoint
 router.get('/health', async (req: Request, res: Response) => {
   try {
-    let redisStatus = 'disconnected';
-    try {
-      await redisClient.ping();
-      redisStatus = 'connected';
-    } catch (error) {
-      redisStatus = 'error';
+    let redisStatus = 'disabled';
+    
+    if (!ignoreRedis && redisClient) {
+      try {
+        await redisClient.ping();
+        redisStatus = 'connected';
+      } catch (error) {
+        redisStatus = 'error';
+      }
     }
 
     res.json({
       success: true,
       status: 'healthy',
       redis: redisStatus,
+      redisIgnored: ignoreRedis,
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
@@ -704,7 +750,9 @@ router.get('/health', async (req: Request, res: Response) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
-  await redisClient.quit();
+  if (redisClient && !ignoreRedis) {
+    await redisClient.quit();
+  }
   process.exit(0);
 });
 

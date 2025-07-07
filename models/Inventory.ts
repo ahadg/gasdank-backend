@@ -67,7 +67,7 @@ const InventorySchema: Schema = new Schema({
   //info: { type: String, required: true },
   qty: { type: Number, required: true },
   unit: { type: String, required: true },
-  name: { type: String, required: true },
+  name: { type: String},
   price: { type: Number, required: true },
   shippingCost: { type: Number, default: 0 },
   active: { type: Boolean, default: true },
@@ -80,7 +80,7 @@ const InventorySchema: Schema = new Schema({
 InventorySchema.pre('save', async function(next) {
   try {
     // Only set these fields if it's a new document
-    console.log("hiiiiiiii",this.isNew)
+    //console.log("hiiiiiiii",this.isNew)
     if (this.isNew) {
       if (!this.product_id) {
         this.product_id = generateProductId();
@@ -91,9 +91,12 @@ InventorySchema.pre('save', async function(next) {
         const reference_number = await getNextReferenceNumber()
         this.reference_number = reference_number
        
-      }else {
-         this.name = `#${this.reference_number} ${this.name}`
       }
+      if(!this.name) {
+         this.name = `#${this.reference_number}`
+        
+      }
+      console.log("this.name",this.name)
     }
     
     // Update the updated_at timestamp
