@@ -48,18 +48,19 @@ router.post('/:user_id', async (req: Request, res: Response) => {
   
 
   router.get('/:userid',
-    //checkAccess("activitylogs","read"), 
+    //checkAccess("activitylogs","read"),
     async (req: Request, res: Response) => {
       try {
         const { userid } = req.params;
         const userObjectId = new mongoose.Types.ObjectId(userid);
         const { type, page, limit, from, to } = req.query;
-        console.log("",{type, page, limit, from, to,userid})
+        console.log("", { type, page, limit, from, to, userid });
+  
         // Convert page and limit to numbers (default values: page 1, limit 10)
         const pageNum = parseInt(page as string, 10) || 1;
         const limitNum = parseInt(limit as string, 10) || 10;
         const skip = (pageNum - 1) * limitNum;
-    
+  
         // Build the match stage for aggregation
         const matchQuery: any = {
           $or: [
@@ -67,10 +68,11 @@ router.post('/:user_id', async (req: Request, res: Response) => {
             { user_created_by: userObjectId }
           ]
         };
-        // also add user_created_by 
+  
         if (type) {
           matchQuery.type = { $eq: type };
         }
+  
         if (from || to) {
           matchQuery.created_at = {};
           if (from) {
@@ -80,10 +82,15 @@ router.post('/:user_id', async (req: Request, res: Response) => {
             matchQuery.created_at.$lte = new Date(to as string);
           }
         }
-       console.log("matchQuery",)
+  
+        console.log("matchQuery", matchQuery);
+  
         const pipeline = [
           { $match: matchQuery },
-          { $facet: {
+          // Add sort stage here, before facet
+          { $sort: { created_at: -1 as -1} }, // or createdAt: -1 depending on your field name
+          { 
+            $facet: {
               logs: [
                 { $skip: skip },
                 { $limit: limitNum },
@@ -130,11 +137,11 @@ router.post('/:user_id', async (req: Request, res: Response) => {
             }
           }
         ];
-    
+  
         const result = await Activity.aggregate(pipeline);
         const logs = result[0].logs;
         const totalCount = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
-    
+  
         res.status(200).json({
           page: pageNum,
           limit: limitNum,

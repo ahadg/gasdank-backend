@@ -3,6 +3,7 @@ import Buyer from '../models/Buyer';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
 import { createActivity } from './activity';
+import { processTransaction } from '../utils/transactionHandler';
 
 const router = Router();
 
@@ -88,7 +89,7 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
 
-    const { email } = req.body;
+    const { email,user_id } = req.body;
 
     // Check if a buyer with the same email already exists
     // const existingBuyer = await Buyer.findOne({ email });
@@ -97,10 +98,10 @@ router.post('/', async (req: Request, res: Response) => {
     // }
 
     // Assign currentBalance and startingBalance if balance is provided
-    if ('balance' in req.body || (!req.body.currentBalance || !req.body.startingBalance)) {
-      req.body.currentBalance = req.body.currentBalance ? req.body.balance : 0;
-      req.body.startingBalance = req.body.startingBalance ? req.body.balance : 0;
-    }
+    // if ('balance' in req.body || (!req.body.currentBalance || !req.body.startingBalance)) {
+    //   req.body.currentBalance = req.body.currentBalance ? req.body.balance : 0;
+    //   req.body.startingBalance = req.body.startingBalance ? req.body.balance : 0;
+    // }
 
     // // Final validation
     // if (!req.body.currentBalance || !req.body.startingBalance) {
@@ -109,6 +110,20 @@ router.post('/', async (req: Request, res: Response) => {
 
     const newBuyer = new Buyer(req.body);
     await newBuyer.save();
+
+    let c_balance = req.body.currentBalance || req.body.startingBalance || req.body?.balance
+
+    if(c_balance) {
+        await processTransaction({
+          user_id: user_id,
+          buyer_id: newBuyer?.id,
+          payment: c_balance,
+          "notes": "",
+          payment_direction: c_balance > 0 ?  "given" : "received" ,
+          type: "payment",
+          payment_method: "Cash"
+        })
+    }
     createActivity({
       user_id : req.body?.user_id, 
       //user_created_by: user_created_by_id,
