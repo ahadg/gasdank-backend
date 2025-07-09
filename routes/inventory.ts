@@ -27,7 +27,8 @@ router.get('/next-reference-number', checkAccess("inventory", "read"), async (re
 // GET /api/inventory/outOfStock
 router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res: Response) => {
   try {
-    const outOfStock = await Inventory.find({ qty: 0 }).populate("category");
+    const userId = req.user?.id;
+    const outOfStock = await Inventory.find({ qty: 0,user_id : userId }).populate("category");
     res.status(200).json(outOfStock);
   } catch (error) {
     res.status(500).json({ error });
@@ -37,7 +38,8 @@ router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res
 // GET /api/inventory/lowInventory
 router.get('/lowInventory', checkAccess("reports","read"),async (req: Request, res: Response) => {
   try {
-    const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 } }).populate("category");
+    const userId = req.user?.id;
+    const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 },user_id : userId }).populate("category");
     res.status(200).json(lowInventory);
   } catch (error) {
     res.status(500).json({ error });
@@ -161,14 +163,14 @@ router.post('/',checkAccess("inventory","create"), async (req: Request, res: Res
 });
 
 // DELETE /api/inventory (soft delete)
-router.delete('/',checkAccess("inventory","delete"), async (req: Request, res: Response) => {
-  try {
-    const { id } = req.body;
-    await Inventory.findByIdAndUpdate(id, { deleted_at: new Date() });
-    res.status(200).json({ message: 'Product deleted' });
-  } catch (error) {
-    res.status(500).json({ error });
-  }
-});
+// router.delete('/',checkAccess("inventory","delete"), async (req: Request, res: Response) => {
+//   try {
+//     const { id } = req.body;
+//     await Inventory.findByIdAndUpdate(id, { deleted_at: new Date() });
+//     res.status(200).json({ message: 'Product deleted' });
+//   } catch (error) {
+//     res.status(500).json({ error });
+//   }
+// });
 
 export default router;
