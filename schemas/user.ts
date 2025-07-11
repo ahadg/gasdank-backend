@@ -6,10 +6,10 @@ const userSchema = Joi.object({
     'string.empty': `"firstName" cannot be an empty field`,
     'any.required': `"firstName" is required`
   }),
-  lastName: Joi.string().required().messages({
-    'string.empty': `"lastName" cannot be an empty field`,
-    'any.required': `"lastName" is required`
+  lastName: Joi.string().optional().allow(null).empty('').messages({
+    'string.empty': `"lastName" cannot be an empty field`
   }),
+  
   userName: Joi.string().required().messages({
     'string.empty': `"userName" cannot be an empty field`,
     'any.required': `"userName" is required`
@@ -34,7 +34,7 @@ const userSchema = Joi.object({
     'string.empty': `"email" cannot be an empty field`,
     'any.required': `"email" is required`
   }),
-  phone: Joi.string().optional()
+  phone: Joi.string().optional().allow(null).empty('')
 });
 
 export const userSignupSchema = Joi.object({
@@ -42,10 +42,10 @@ export const userSignupSchema = Joi.object({
     'string.empty': `"firstName" cannot be an empty field`,
     'any.required': `"firstName" is required`
   }),
-  lastName: Joi.string().required().messages({
-    'string.empty': `"lastName" cannot be an empty field`,
-    'any.required': `"lastName" is required`
+  lastName: Joi.string().optional().allow(null).empty('').messages({
+    'string.empty': `"lastName" cannot be an empty field`
   }),
+  
   userName: Joi.string().required().messages({
     'string.empty': `"userName" cannot be an empty field`,
     'any.required': `"userName" is required`
@@ -67,7 +67,7 @@ export const userSignupSchema = Joi.object({
     'string.empty': `"email" cannot be an empty field`,
     'any.required': `"email" is required`
   }),
-  phone: Joi.string().optional(),
+  phone: Joi.string().optional().allow(null).empty(''),
   plan: Joi.string().required().messages({
     'string.empty': `"plan" cannot be an empty field`,
     'any.required': `"plan" is required`
