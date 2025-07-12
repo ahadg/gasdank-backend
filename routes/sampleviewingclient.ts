@@ -4,6 +4,10 @@ import { authenticateJWT } from '../middlewares/authMiddleware'
 import SampleViewingClient from '../models/SampleViewingClients'
 import Notification from '../models/notification'
 import { createActivity } from './activity'
+import User from '../models/User'
+import { sendEmail } from '../utils/sendEmail'
+import Buyer from '../models/Buyer'
+import { sendSMS } from '../utils/sendSMS'
 
 const router = Router()
 router.use(authenticateJWT)
@@ -112,8 +116,8 @@ router.post('/', async (req: Request, res: Response) => {
 router.patch('/:sessionId/status', async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params
-    const { status } = req.body
-
+    const { status,transaction_id } = req.body
+    console.log("req.body",req.body)
     if (!status || !['pending', 'accepted', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be pending, accepted, or rejected' })
     }
@@ -122,21 +126,50 @@ router.patch('/:sessionId/status', async (req: Request, res: Response) => {
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
     // Update session status
-    session.status = status
-    await session.save()
-
+    // session.status = status
+    // await session.save()
+    console.log("req.user",req.user)
+    const the_user = await User.findById(req.user?.id);
     // Create activity log for the status update
     try {
+      const productSummary = session.items
+        .map((p : any) => `"${p.name.trim()}" (x${p.qty})`)
+        .join(', ');
+      // create activity logs for admin
+      await createActivity({
+        user_id: the_user?.created_by,
+        buyer_id: session.buyer_id,
+        worker_id: req.user?.id,
+        transaction_id,
+        action: "update",
+        resource_type: "sample",
+        resource_id: session._id,
+        page: "sampleviewing",
+        type: `sample_viewing_${status}`,
+        description: `Sample session updated to "${status}". Products: ${productSummary}.`
+      });
+
+      //create activity logs for user
       await createActivity({
         user_id: req.user?.id,
         buyer_id: session.buyer_id,
         action: "update", 
+        transaction_id,
         resource_type: "sample",
         resource_id: session._id,
         page: "sampleviewing",
-        type: "sample_viewing_updated",
-        description: `Sample viewing session ${status}`
+        type: `sample_viewing_${status}`,
+        description: `Sample session updated to "${status}". Products: ${productSummary}.`
       })
+
+      // notify client
+      const buyer = await Buyer.findById(session.buyer_id)
+      sendSMS({
+        to : buyer?.phone,
+        message : `Sample "${status}" by ${the_user?.name}. Products: ${productSummary}.`
+      })
+
+      
     } catch (activityError) {
       console.error('Error creating activity:', activityError)
       // Don't fail the request if activity logging fails

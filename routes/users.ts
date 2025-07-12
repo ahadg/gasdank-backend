@@ -318,6 +318,20 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     ]);
     const totalSales = (totalSalesAgg[0]?.totalSales || 0).toFixed(2)
 
+    // total return products
+    const totalSalesProductReturnAgg = await Transaction.aggregate([
+      { 
+        $match: { 
+          user_id: userObjectId, 
+          type: "return", 
+          sale_price: { $exists: true },
+          ...dateCondition
+        } 
+      },
+      { $group: { _id: null, totalSales: { $sum: "$sale_price" } } }
+    ]);
+    const totalSalesReturn = (totalSalesProductReturnAgg[0]?.totalSales || 0).toFixed(2)
+
     // 2. Total Profit: Sum of profit from "sale" transactions for this user.
     const totalProfitAgg = await Transaction.aggregate([
       { 
@@ -331,6 +345,20 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
       { $group: { _id: null, totalProfit: { $sum: "$profit" } } }
     ]);
     const totalProfit = (totalProfitAgg[0]?.totalProfit || 0).toFixed(2)
+
+    // 2. Total Profit of return products: Sum of profit from "return" transactions for this user.
+    const totalProductReturnProfitAgg = await Transaction.aggregate([
+      { 
+        $match: { 
+          user_id: userObjectId, 
+          type: "return", 
+          profit: { $exists: true },
+          ...dateCondition
+        } 
+      },
+      { $group: { _id: null, totalProfit: { $sum: "$profit" } } }
+    ]);
+    const totalProfitReturn = (totalProductReturnProfitAgg[0]?.totalProfit || 0).toFixed(2)
 
     // 3. Inventory Value: Sum over all Inventory documents (price * qty) for this user.
     const inventoryValueAgg = await Inventory.aggregate([
@@ -372,14 +400,13 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
 
     // Get the logged-in user's financial details.
     const user = await User.findById(userObjectId);
-
+    
     // 6. Company Balance: Fixed calculation to avoid floating-point precision issues
     console.log({
       rawInventoryValue,
       inventoryValue,
       clientPayableBalances,
       companyPayableBalance,
-      online_balance: user?.online_balance || 0,
       cash_balance: user?.cash_balance || 0
     });
 
@@ -388,11 +415,13 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     console.log('Raw inventoryValue:', inventoryValue);
     console.log('Raw clientPayableBalances:', clientPayableBalances);
     console.log('Raw companyPayableBalance:', companyPayableBalance);
-    console.log('User cash_balance:', user?.cash_balance || 0);
+    console.log('User other_munual_balance:', user?.other_munual_balance || 0);
     console.log('Math.abs(companyPayableBalance):', Math.abs(companyPayableBalance));
 
     // Calculate company balance without floating-point precision issues
-    const rawCompanyBalance = Number(inventoryValue) + clientPayableBalances + (user?.cash_balance || 0) - Math.abs(Number(companyPayableBalance));
+    const rawCompanyBalance = Number(inventoryValue) + clientPayableBalances 
+    + (user?.cash_balance || 0) 
+    - Math.abs(Number(companyPayableBalance));
     const companyBalance = rawCompanyBalance.toFixed(2)// Round to 2 decimal places
     
     console.log('Raw company balance calculation:', rawCompanyBalance);
@@ -406,15 +435,16 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     };
 
     res.status(200).json({
-      totalSales: formatNumber(totalSales),
-      totalProfit: formatNumber(totalProfit),
+      totalSales: formatNumber(totalSales - totalSalesReturn),
+      totalProfit: formatNumber(totalProfit - totalProfitReturn),
       inventoryValue: formatNumber(inventoryValue),
       clientPayableBalances: formatNumber(clientPayableBalances),
       companyPayableBalance: formatNumber(companyPayableBalance),
-      loggedInUserTotalBalance: formatNumber(user?.cash_balance),
-      onlineBalance: formatNumber(user?.online_balance),
+      manual_balance: formatNumber(user?.manual_balance),
+      // onlineBalance: formatNumber(user?.online_balance),
       companyBalance: formatNumber(companyBalance),
-      other_balance: formatNumber(user?.other_balance)
+      other_balance: formatNumber(user?.other_balance),
+      other_munual_balance: (user?.other_munual_balance)
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

@@ -14,6 +14,7 @@ export interface IInventory extends Document {
   name: string;
   price: number;
   shippingCost?: number;
+  strain_type : string;
   active?: boolean;
   notes?: string;
   created_at: Date;
@@ -70,6 +71,7 @@ const InventorySchema: Schema = new Schema({
   name: { type: String},
   price: { type: Number, required: true },
   shippingCost: { type: Number, default: 0 },
+  strain_type : {type : String},
   active: { type: Boolean, default: true },
   notes: { type: String },
   created_at: { type: Date, default: Date.now },
@@ -86,14 +88,14 @@ InventorySchema.pre('save', async function(next) {
         this.product_id = generateProductId();
       }
       console.log("this.reference_number",this.reference_number) 
-      if (!this.reference_number) {
-        //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
-        const reference_number = await getNextReferenceNumber()
-        this.reference_number = reference_number
+      // if (!this.reference_number) {
+      //   //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
+      //   const reference_number = await getNextReferenceNumber()
+      //   this.reference_number = reference_number
        
-      }
+      // }
       if(!this.name) {
-         this.name = `#${this.reference_number}`
+         this.name = `#${this.reference_number || ""}`
         
       }
       console.log("this.name",this.name)

@@ -9,7 +9,8 @@ export interface IUser extends Document {
   email: string;
   phone?: string;
   inventory_value: number;
-  balance : number;
+  manual_balance : number;
+  other_munual_balance : Object;
   created_by : mongoose.Types.ObjectId;
   other_balance: object;
   cash_balance : object;
@@ -39,8 +40,9 @@ const UserSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   phone: { type: String },
   inventory_value: {type : Number},
-  balance : {type : Number},
+  manual_balance : {type : Number},
   other_balance: {type : Object,default : {}},
+  other_munual_balance: {type : Object,default : {}},
   cash_balance : {type : Number},
   access : {type : Object},
   role : {type : String, default : "user"},
