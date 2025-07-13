@@ -6,7 +6,7 @@ import checkAccess from '../middlewares/accessMiddleware';
 const router = Router();
 router.use(authenticateJWT);
 
-router.get('/:userid',checkAccess("config","read"),async (req: Request, res: Response) => {
+router.get('/:userid',checkAccess("config.categories","read"),async (req: Request, res: Response) => {
     try {
       const { userid } = req.params;
       const categories = await Category.find({user_id : userid});
@@ -27,7 +27,7 @@ router.get('/:userid',checkAccess("config","read"),async (req: Request, res: Res
 // });
 
 // POST /api/categories
-router.post('/',checkAccess("config","create"), async (req: Request, res: Response) => {
+router.post('/',checkAccess("config.categories","create"), async (req: Request, res: Response) => {
   try {
     const newCategory = new Category(req.body);
     await newCategory.save();
@@ -38,7 +38,7 @@ router.post('/',checkAccess("config","create"), async (req: Request, res: Respon
 });
 
 // PUT /api/categories
-router.put('/', async (req: Request, res: Response) => {
+router.put('/',checkAccess("config.categories","edit"), async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     console.log("updated Data",req.body?.formData)
@@ -50,7 +50,7 @@ router.put('/', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/categories
-router.delete('/', async (req: Request, res: Response) => {
+router.delete('/',checkAccess("config.categories","delete"), async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     await Category.findByIdAndDelete(id);

@@ -22,7 +22,7 @@ const router = Router();
 const saltRounds = 10;
 
 // GET /api/users - get all users
-router.get('/',authenticateJWT, checkAccess("config","read"), async (req: Request, res: Response) => {
+router.get('/',authenticateJWT, checkAccess("config.users","read"), async (req: Request, res: Response) => {
   console.log("user",req.user)
   try {
     const the_user = await User.findById(req.user?.id)
@@ -54,7 +54,7 @@ router.get('/me', authenticateJWT, async (req: any, res: Response) => {
 });
 
 // GET /api/users/:id - get a specific user by ID
-router.get('/:id',authenticateJWT,checkAccess("config","read"), async (req: Request, res: Response) => {
+router.get('/:id',authenticateJWT,checkAccess("config.users","read"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -70,7 +70,7 @@ router.get('/:id',authenticateJWT,checkAccess("config","read"), async (req: Requ
 
 
 // POST /api/users - create a new user
-router.post('/',authenticateJWT, checkAccess("config","create"), async (req: Request, res: Response) => {
+router.post('/',authenticateJWT,checkAccess("config.users","create"), async (req: Request, res: Response) => {
   try {
     // Validate request body against schema
     const { error, value } = userSchema.validate(req.body);
@@ -187,7 +187,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
 
 // PATCH /api/users/:id - update a user (with password hashing if password is provided)
-router.patch('/:id',authenticateJWT,checkAccess("config","read"), async (req: Request, res: Response) => {
+router.patch('/:id',authenticateJWT,checkAccess("config.users","edit"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -198,7 +198,7 @@ router.patch('/:id',authenticateJWT,checkAccess("config","read"), async (req: Re
     } else {
        delete updateData.password
     }
-
+    console.log("updateData",updateData)
     const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
     if (!updatedUser) {
       return res.status(404).json({ message: 'User not found' });
@@ -444,7 +444,8 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
       // onlineBalance: formatNumber(user?.online_balance),
       companyBalance: formatNumber(companyBalance),
       other_balance: formatNumber(user?.other_balance),
-      other_munual_balance: (user?.other_munual_balance)
+      other_munual_balance: (user?.other_munual_balance),
+      user : user
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

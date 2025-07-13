@@ -9,3 +9,5 @@
 # sales
  -- should be- profit = sale_price - price with shipping cost
 
+# client/buyer
+ -- 
