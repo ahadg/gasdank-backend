@@ -124,12 +124,12 @@ You can process the following types of inputs:
 
 🙋 RESPONSE FORMAT
 
-SUCCESS responses:
+SUCCESS responses examples:
 ✅ "Added 1 Pound Kush to inventory (ID: MANA-123456). Jack's balance updated to $1300."
 ✅ "Logged $500 packaging expense successfully."
 ✅ "Emily's current balance: $2,150.00"
 
-ERROR responses:
+ERROR responses examples:
 ❌ "Could not find buyer 'Emily'. Please check the name or add them as a new client."
 ❌ "Invalid amount format. Please specify a valid dollar amount."
 
