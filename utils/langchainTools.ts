@@ -386,3 +386,146 @@ export const addExpenseTool = tool(
       })
     }
   );
+
+
+  // Web Search Tool
+ // Web Search Tool - Google Custom Search Version
+export const webSearchTool = tool(
+  async (input: { query: string; maxResults?: number }) => {
+    try {
+      const { query, maxResults = 3 } = input;
+      console.log(`🔍 Searching Google for: ${query}`);
+
+      // Google Custom Search API credentials (add these to your environment variables)
+      const GOOGLE_API_KEY = process.env.GOOGLE_SEARCH_API_KEY;
+      const GOOGLE_SEARCH_ENGINE_ID = process.env.GOOGLE_SEARCH_ENGINE_ID;
+
+      // Method 1: Try Google Custom Search API
+      if (GOOGLE_API_KEY && GOOGLE_SEARCH_ENGINE_ID) {
+        try {
+          const googleUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=${maxResults}`;
+          
+          const googleResponse = await fetch(googleUrl);
+          
+          if (googleResponse.ok) {
+            const googleData: any = await googleResponse.json();
+            
+            if (googleData.items && googleData.items.length > 0) {
+              const results = googleData.items.map((item: any) => ({
+                title: item.title,
+                snippet: item.snippet,
+                url: item.link,
+                source: 'Google Search'
+              }));
+              
+              return {
+                success: true,
+                query,
+                results,
+                timestamp: new Date().toISOString()
+              };
+            }
+          }
+        } catch (googleError) {
+          console.log('Google search failed, trying fallback methods...');
+        }
+      } else {
+        console.log('Google API credentials not found, using fallback methods...');
+      }
+
+      // Method 2: Try DuckDuckGo as fallback
+      try {
+        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+        const ddgResponse = await fetch(ddgUrl);
+        
+        if (ddgResponse.ok) {
+          const ddgData: any = await ddgResponse.json();
+          
+          if (ddgData.Abstract && ddgData.Abstract.length > 0) {
+            return {
+              success: true,
+              query,
+              results: [{
+                title: ddgData.Heading || 'Answer',
+                snippet: ddgData.Abstract,
+                url: ddgData.AbstractURL || '',
+                source: 'DuckDuckGo'
+              }],
+              timestamp: new Date().toISOString()
+            };
+          }
+        }
+      } catch (ddgError) {
+        console.log('DuckDuckGo search failed, trying Wikipedia...');
+      }
+
+      // Method 3: Try Wikipedia API for factual information
+      try {
+        const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+        const wikiResponse = await fetch(wikiUrl);
+        
+        if (wikiResponse.ok) {
+          const wikiData: any = await wikiResponse.json();
+          
+          if (wikiData.extract && wikiData.extract.length > 0) {
+            return {
+              success: true,
+              query,
+              results: [{
+                title: wikiData.title || 'Wikipedia',
+                snippet: wikiData.extract,
+                url: wikiData.content_urls?.desktop?.page || '',
+                source: 'Wikipedia'
+              }],
+              timestamp: new Date().toISOString()
+            };
+          }
+        }
+      } catch (wikiError) {
+        console.log('Wikipedia search failed...');
+      }
+
+      // Method 4: Return helpful fallback with setup instructions
+      return {
+        success: true,
+        query,
+        results: [{
+          title: 'Search Setup Required',
+          snippet: `To enable Google search, please set up:
+          1. Google Custom Search Engine at https://cse.google.com/
+          2. Get API key from Google Cloud Console
+          3. Add GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID to environment variables
+          
+          For "${query}", try checking official sources or recent news websites directly.`,
+          url: 'https://developers.google.com/custom-search/v1/introduction',
+          source: 'Setup Instructions'
+        }],
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error: any) {
+      console.error('🔍 Web search error:', error.message);
+      return {
+        success: false,
+        error: `Search failed: ${error.message}`,
+        query: input.query,
+        results: [{
+          title: 'Search Error',
+          snippet: `Unable to search for "${input.query}" due to technical issues. Please try again later.`,
+          url: '',
+          source: 'Error'
+        }]
+      };
+    }
+  },
+  {
+    name: "web_search",
+    description: "Search the internet for current information, news, facts, or answers to general questions. Use this when you need up-to-date information or when answering questions outside of business operations.",
+    schema: z.object({
+      query: z.string().describe("The search query to find information about"),
+      maxResults: z.number().optional().describe("Maximum number of results to return (default: 3)")
+    })
+  }
+);
+  
+

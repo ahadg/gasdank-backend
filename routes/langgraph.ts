@@ -6,7 +6,7 @@ import { StateGraph, END, START } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import express, { Request, Response } from 'express';
 import { createClient } from 'redis';
-import { update_balance_buyer, addBuyerTool, addExpenseTool, addInventoryTool, findBuyersTool, findExpensesTool, findInventoryTool, updateBuyerTool } from "../utils/langchainTools";
+import { update_balance_buyer, addBuyerTool, addExpenseTool, addInventoryTool, findBuyersTool, findExpensesTool, findInventoryTool, updateBuyerTool, webSearchTool } from "../utils/langchainTools";
 
 const router = express.Router();
 
@@ -81,7 +81,9 @@ const tools = [
   addBuyerTool,
   updateBuyerTool,
   addExpenseTool,
-  addInventoryTool
+  addInventoryTool,
+  // General tools
+  webSearchTool,
 ];
 
 // Bind tools to the LLM
@@ -90,12 +92,20 @@ const llmWithTools = llm.bindTools(tools);
 // System message
 const systemMessage = `You are a structured AI business assistant operating through a command-style chat interface. Users send business commands and questions in plain language. Your job is to process valid business commands, respond to FAQs, and guide users politely when input is unrecognized.
 
-📊 DATA CONTEXT
+📊 BUSINESS DATA CONTEXT
 You have access to the following MongoDB collections:
 - inventories: Product/inventory management
 - buyers: Client/buyer information and balances
 - expenses: Business expense tracking
 - categories: Product and expense categories
+
+🧠 GENERAL CAPABILITIES
+You can also help with:
+- General knowledge questions (science, history, geography, technology, health)
+- Current events and news (via web search)
+- Research and fact-checking
+- Educational content
+- How-to guides and explanations
 
 ✅ PRIMARY FUNCTIONS
 You can process the following types of inputs:
@@ -121,6 +131,9 @@ You can process the following types of inputs:
 4. GENERAL QUERIES
    - Business-related FAQs
    - Data retrieval requests
+   - Answer general knowledge questions
+   - Search the internet for current information
+   - Provide explanations on various topics
 
 🙋 RESPONSE FORMAT
 
@@ -128,6 +141,9 @@ SUCCESS responses examples:
 ✅ "Added 1 Pound Kush to inventory (ID: MANA-123456). Jack's balance updated to $1300."
 ✅ "Logged $500 packaging expense successfully."
 ✅ "Emily's current balance: $2,150.00"
+
+GENERAL KNOWLEDGE examples:
+🧠 "The capital of France is Paris. It's been the capital since 987 AD..."
 
 ERROR responses examples:
 ❌ "Could not find buyer 'Emily'. Please check the name or add them as a new client."
@@ -474,6 +490,9 @@ async function callTools(state: AgentState): Promise<Partial<AgentState>> {
           break;
         case 'add_expense':
           result = await addExpenseTool.invoke(toolCall.args, toolConfig);
+          break;
+        case 'web_search':
+          result = await webSearchTool.invoke(toolCall.args);
           break;
         default:
           result = { 
