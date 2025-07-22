@@ -94,7 +94,32 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+router.get('/sales/:buyerid', async (req, res) => {
+  try {
+    const { buyerid } = req.params;
 
+    const transaction = await Transaction.find({buyer_id : buyerid, type : "sale",}).populate({
+      path: 'items',
+      populate: {
+        path: 'transactionitem_id',
+        model: 'TransactionItem',
+        populate: {
+          path: 'inventory_id',
+          model: 'Inventory'
+        }
+      }
+    })
+    console.log("adsd",{buyerid, type : "sale"})
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    res.status(200).json(transaction);
+  } catch (error) {
+    console.error('Error fetching transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 router.post('/', checkAccess("sale", "create"), async (req: Request, res: Response) => {
   // Expected payload structure:

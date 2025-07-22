@@ -415,12 +415,12 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     console.log('Raw inventoryValue:', inventoryValue);
     console.log('Raw clientPayableBalances:', clientPayableBalances);
     console.log('Raw companyPayableBalance:', companyPayableBalance);
-    console.log('User other_munual_balance:', user?.other_munual_balance || 0);
+    console.log('User:', user || 0);
     console.log('Math.abs(companyPayableBalance):', Math.abs(companyPayableBalance));
 
     // Calculate company balance without floating-point precision issues
     const rawCompanyBalance = Number(inventoryValue) + clientPayableBalances 
-    + (user?.cash_balance || 0) 
+    + (user?.cash_balance || 0) + Number(user?.other_balance?.EFT || 0) + Number(user?.other_balance?.Crypto || 0)
     - Math.abs(Number(companyPayableBalance));
     const companyBalance = rawCompanyBalance.toFixed(2)// Round to 2 decimal places
     
@@ -440,11 +440,12 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
       inventoryValue: formatNumber(inventoryValue),
       clientPayableBalances: formatNumber(clientPayableBalances),
       companyPayableBalance: formatNumber(companyPayableBalance),
-      manual_balance: formatNumber(user?.manual_balance),
       // onlineBalance: formatNumber(user?.online_balance),
       companyBalance: formatNumber(companyBalance),
       other_balance: formatNumber(user?.other_balance),
-      other_munual_balance: (user?.other_munual_balance),
+
+      //manual_balance: formatNumber(user?.manual_balance),
+      //other_munual_balance: (user?.other_munual_balance),
       user : user
     });
   } catch (error: any) {

@@ -25,6 +25,7 @@ export interface TransactionPayload {
   user_id: string;
   buyer_id: string;
   worker_id?: string;
+  sale_id?: string;
   payment: number;
   price?: number;
   total_shipping?: number;
@@ -98,6 +99,7 @@ const createTransaction = async (payload: TransactionPayload, transactionType: s
     buyer_id: payload.buyer_id,
     worker_id: payload.worker_id,
     type: transactionType,
+    sale_id : payload.sale_id,
     notes: payload.notes,
     payment_method: payload.payment_method,
     price: payload.price || payload.payment,
