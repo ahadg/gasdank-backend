@@ -144,9 +144,36 @@ const updateUserBalance = async (userId: string, paymentMethod: string, amount: 
 /**
  * Process payment transaction
  */
-const processPaymentTransaction = async (transaction: any, payload: TransactionPayload, user: any, buyer: any) => {
+const processPaymentTransaction = async (transaction: any, payload: TransactionPayload, user: any, buyer: any): Promise<TransactionResult> => {
   const { payment, payment_direction = 'received', payment_method = 'unspecified' } = payload;
-  
+  console.log({ payment, payment_direction, payment_method })
+
+   // Check balance for outgoing payments
+   if (payment_direction === "given") {
+    console.log("user?.cash_balance", user?.cash_balance);
+    
+    let userBalance = 0;
+    let balanceType = '';
+    
+    if (payment_method === "EFT") {
+      userBalance = user?.other_balance?.EFT || 0;
+      balanceType = 'EFT';
+    } else if (payment_method === "Crypto") {
+      userBalance = user?.other_balance?.Crypto || 0;
+      balanceType = 'Crypto';
+    } else if (payment_method === "Cash") {
+      userBalance = user?.cash_balance || 0;
+      balanceType = 'Cash';
+    }
+    
+    if (Number(payment) > userBalance) {
+      return {
+        success: false,
+        error: `Insufficient ${balanceType} balance. You only have ${userBalance} available.`,
+      };
+    }
+  }
+
   // Create TransactionPayment record
   const transactionPayment = new TransactionPayment({
     transaction_id: transaction._id,
@@ -156,7 +183,7 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
     payment_method,
     payment_date: new Date(),
   });
-  
+
   await transactionPayment.save();
 
   // Update buyer's balance
@@ -164,11 +191,11 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
   console.log({
     payment_direction,
     buyerBalanceChange,
-    buyer_id : payload.buyer_id
+    buyer_id: payload.buyer_id
   })
   const the_buyer = await Buyer.findById(payload.buyer_id)
-  await Buyer.findByIdAndUpdate(payload.buyer_id, { 
-    $inc: { currentBalance: buyerBalanceChange } 
+  await Buyer.findByIdAndUpdate(payload.buyer_id, {
+    $inc: { currentBalance: buyerBalanceChange }
   });
 
   // Update user's balance
@@ -189,7 +216,10 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
     payment_direction,
     description: `${payment} ${payment_method} ${payment_direction} ${payment_direction === 'received' ? 'from' : 'to'} ${buyer.firstName} ${buyer.lastName}`
   });
+
+  return { success: true };
 };
+
 
 /**
  * Process inventory addition/restock transaction
@@ -408,9 +438,8 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
       return { success: false, error: validation.error };
     }
 
-
     const transactionType = payload.type || 'sale';
-    
+
     // Fetch user and buyer data
     const [user, buyer] = await Promise.all([
       User.findById(payload.user_id),
@@ -435,22 +464,32 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
     // Create base transaction
     const transaction = await createTransaction(payload, transactionType);
 
-
     // Process based on transaction type
+    let result;
     switch (transactionType) {
       case 'payment':
-        await processPaymentTransaction(transaction, payload, user, buyer);
+        result = await processPaymentTransaction(transaction, payload, user, buyer);
+        console.log("resultttt",result)
+        if (!result.success) {
+          return result; // Return error immediately
+        }
         break;
       case 'inventory_addition':
       case 'restock':
-        if(!payload?.buyer_id) {
-          await processInventoryTransactionWithoutBuyer(transaction, payload, user, transactionType)
+        if (!payload?.buyer_id) {
+          result = await processInventoryTransactionWithoutBuyer(transaction, payload, user, transactionType);
         } else {
-        await processInventoryTransaction(transaction, payload, user, transactionType);
+          result = await processInventoryTransaction(transaction, payload, user, transactionType);
         }
+        // if (result && !result.success) {
+        //   return result;
+        // }
         break;
       default: // sale, return
-        await processSaleReturnTransaction(transaction, payload, user, buyer, transactionType);
+        result = await processSaleReturnTransaction(transaction, payload, user, buyer, transactionType);
+        // if (result && !result.success) {
+        //   return result;
+        // }
     }
 
     return {
