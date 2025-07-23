@@ -80,7 +80,7 @@ const PrevValueSchema = new Schema({
 // Transaction Schema
 const TransactionSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
+  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer' },
   sale_id: { type: Schema.Types.ObjectId, ref: 'Transaction' },
   worker_id: { type: Schema.Types.ObjectId, ref: 'User' },
   transactionpayment_id: { type: Schema.Types.ObjectId, ref: 'TransactionPayment' },

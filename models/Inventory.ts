@@ -63,7 +63,7 @@ const InventorySchema: Schema = new Schema({
   },
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   user_created_by_id: { type: Schema.Types.ObjectId, ref: 'User' },
-  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
+  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer', },
   category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
   //info: { type: String, required: true },
   qty: { type: Number, required: true },

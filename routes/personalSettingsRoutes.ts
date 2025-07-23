@@ -13,13 +13,14 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res) => {
       // Create default settings if none exist
       const defaultSettings = await PersonalSettings.create({
         user_id: req.user.id,
-        units: ['pounds', 'kg', 'gram', 'per piece']
+        units: ['pounds', 'kg', 'gram', 'per piece'],
+        default_unit: 'pounds'
       });
       return res.json(defaultSettings);
     }
     res.json(settings);
   } catch (err) {
-    console.log("err",err)
+    console.log("err", err)
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -61,6 +62,35 @@ router.patch('/units', authenticateJWT, async (req: AuthRequest, res) => {
     );
     
     res.json({ message: 'Units updated', settings });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update default unit (authentication required)
+router.patch('/default-unit', authenticateJWT, async (req: AuthRequest, res) => {
+  try {
+    const { default_unit } = req.body;
+    
+    if (!default_unit || typeof default_unit !== 'string') {
+      return res.status(400).json({ error: 'Default unit must be a valid string' });
+    }
+    
+    const settings = await PersonalSettings.findOne({ user_id: req.user.id });
+    
+    if (!settings) {
+      return res.status(404).json({ error: 'Settings not found' });
+    }
+    
+    // Check if the default_unit exists in the units array
+    if (!settings.units.includes(default_unit)) {
+      return res.status(400).json({ error: 'Default unit must be one of the existing units' });
+    }
+    
+    settings.default_unit = default_unit;
+    await settings.save();
+    
+    res.json({ message: 'Default unit updated', settings });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

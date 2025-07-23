@@ -52,9 +52,9 @@ const validatePayload = (payload: TransactionPayload): { isValid: boolean; error
   if (!payload.user_id || !Types.ObjectId.isValid(payload.user_id)) {
     return { isValid: false, error: 'Valid user_id is required' };
   }
-  if (!payload.buyer_id || !Types.ObjectId.isValid(payload.buyer_id)) {
-    return { isValid: false, error: 'Valid buyer_id is required' };
-  }
+  // if (!payload.buyer_id || !Types.ObjectId.isValid(payload.buyer_id)) {
+  //   return { isValid: false, error: 'Valid buyer_id is required' };
+  // }
   if (payload.type === 'payment' && !payload.payment) {
     return { isValid: false, error: 'Payment amount is required for payment transactions' };
   }
@@ -255,6 +255,68 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
   });
 };
 
+
+const processInventoryTransactionWithoutBuyer = async (transaction: any, payload: TransactionPayload, user: any, transactionType: string) => {
+  const { items = [], price = 0, buyer_id, worker_id } = payload;
+  const transactionItemIds: { transactionitem_id: any }[] = [];
+  let description = '';
+
+  // Process each item
+  for (const item of items) {
+    description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)}) ${item.shipping ? '+ (🚚 ' + formatCurrency(item.shipping * item.qty) + ')' : ''}\n`;
+    console.log("buyer_id***",buyer_id)
+    const transactionItem = new TransactionItem({
+      transaction_id: transaction._id,
+      inventory_id: item.inventory_id,
+      user_id: payload.user_id,
+      //buyer_id,
+      qty: item.qty,
+      measurement: item.measurement,
+      shipping: item.shipping,
+      type: transactionType,
+      unit: item.unit,
+      price: item.price,
+      sale_price: item.sale_price,
+    });
+    console.log("buyer_id***",buyer_id)
+    await transactionItem.save();
+    transactionItemIds.push({ transactionitem_id: transactionItem._id });
+
+    // Update inventory for restock
+    if (transactionType === 'restock') {
+      await Inventory.findByIdAndUpdate(item.inventory_id, { 
+        $inc: { qty: item.qty } 
+      });
+    }
+  }
+
+  // Calculate total shipping
+  const totalShippingVal = items.reduce((total, item) => {
+    return total + (Number(item.shipping) * Number(item.qty) || 0);
+  }, 0);
+
+  const roundBalance = Number(price) + Number(totalShippingVal);
+
+  // // Update buyer's balance
+  // await Buyer.findByIdAndUpdate(buyer_id, { 
+  //   $inc: { currentBalance: -roundBalance } 
+  // });
+
+  // Update transaction with item IDs
+  transaction.items = transactionItemIds;
+  await transaction.save();
+
+  // Create logs
+  createlogs(user, {
+    //buyer_id,
+    //worker_id,
+    type: transactionType,
+    transaction_id: transaction._id,
+    amount: roundBalance,
+    description,
+  });
+};
+
 /**
  * Process sale/return transaction
  */
@@ -346,6 +408,7 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
       return { success: false, error: validation.error };
     }
 
+
     const transactionType = payload.type || 'sale';
     
     // Fetch user and buyer data
@@ -357,9 +420,9 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
     if (!user) {
       return { success: false, error: 'User not found' };
     }
-    if (!buyer) {
-      return { success: false, error: 'Buyer not found' };
-    }
+    // if (!buyer) {
+    //   return { success: false, error: 'Buyer not found' };
+    // }
 
     // Validate inventory for sales
     if (transactionType === 'sale') {
@@ -372,6 +435,7 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
     // Create base transaction
     const transaction = await createTransaction(payload, transactionType);
 
+
     // Process based on transaction type
     switch (transactionType) {
       case 'payment':
@@ -379,7 +443,11 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
         break;
       case 'inventory_addition':
       case 'restock':
+        if(!payload?.buyer_id) {
+          await processInventoryTransactionWithoutBuyer(transaction, payload, user, transactionType)
+        } else {
         await processInventoryTransaction(transaction, payload, user, transactionType);
+        }
         break;
       default: // sale, return
         await processSaleReturnTransaction(transaction, payload, user, buyer, transactionType);
