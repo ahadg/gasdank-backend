@@ -80,6 +80,8 @@ const PrevValueSchema = new Schema({
 // Transaction Schema
 const TransactionSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  admin_id: { type: Schema.Types.ObjectId, ref: 'User' }, // optional, only if created by an admin
+  created_by_role: { type: String, enum: ['user', 'admin'], default : "admin" }, // helps in filtering
   buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer' },
   sale_id: { type: Schema.Types.ObjectId, ref: 'Transaction' },
   worker_id: { type: Schema.Types.ObjectId, ref: 'User' },

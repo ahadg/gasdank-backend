@@ -14,6 +14,9 @@ export interface ITransactionPayment extends Document {
 const TransactionPaymentSchema: Schema = new Schema({
   transaction_id : { type: Schema.Types.ObjectId, ref: 'Transaction', required: true },
   buyer_id : { type: Schema.Types.ObjectId, ref: 'Buyer', required: true },
+  admin_id: { type: Schema.Types.ObjectId, ref: 'User' }, // optional, only if created by an admin
+  created_by_role: { type: String, enum: ['user', 'admin'], default : 'admin' }, // helps in filtering
+  user_id: { type: Schema.Types.ObjectId, ref: 'User'},
   amount_paid: { type: Number, required: true },
   payment_method: { type: String, required: true },
   payment_direction : {type : String, required : true},

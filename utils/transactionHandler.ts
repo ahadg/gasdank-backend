@@ -30,6 +30,8 @@ export interface TransactionPayload {
   price?: number;
   total_shipping?: number;
   payment_direction?: 'received' | 'given';
+  created_by_role?: string;
+  admin_id? : string;
   sale_price?: number;
   profit?: number;
   notes?: string;
@@ -93,8 +95,8 @@ const validateInventory = async (items: TransactionItemData[]): Promise<{ isVali
 /**
  * Create base transaction record
  */
-const createTransaction = async (payload: TransactionPayload, transactionType: string) => {
-  const transaction = new Transaction({
+const createTransaction = async (payload: TransactionPayload, transactionType: string, user : any) => {
+  let obj = {
     user_id: payload.user_id,
     buyer_id: payload.buyer_id,
     worker_id: payload.worker_id,
@@ -107,9 +109,15 @@ const createTransaction = async (payload: TransactionPayload, transactionType: s
     sale_price: payload.sale_price,
     total_shipping: payload.total_shipping?.toFixed(2),
     profit: payload.profit?.toFixed(2),
-    items: []
-  });
-  
+    items: [],
+    created_by_role : "admin",
+    admin_id : undefined
+  }
+  if(user.created_by) {
+    obj.created_by_role = "user"
+    obj.admin_id = user.created_by
+  }
+  const transaction = new Transaction(obj);
   await transaction.save();
   return transaction;
 };
@@ -173,16 +181,23 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
       };
     }
   }
-
-  // Create TransactionPayment record
-  const transactionPayment = new TransactionPayment({
+  let obj = {
     transaction_id: transaction._id,
     buyer_id: payload.buyer_id,
     amount_paid: payment,
     payment_direction,
     payment_method,
     payment_date: new Date(),
-  });
+    created_by_role : 'admin',
+    user_id : user?.id,
+    admin_id : undefined
+  }
+  if(user.created_by) {
+    obj.created_by_role = "user"
+    obj.admin_id = user.created_by
+  }
+  // Create TransactionPayment record
+  const transactionPayment = new TransactionPayment(obj);
 
   await transactionPayment.save();
 
@@ -232,8 +247,7 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
   // Process each item
   for (const item of items) {
     description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)}) ${item.shipping ? '+ (🚚 ' + formatCurrency(item.shipping * item.qty) + ')' : ''}\n`;
-    
-    const transactionItem = new TransactionItem({
+    let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
       user_id: payload.user_id,
@@ -245,7 +259,15 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
       unit: item.unit,
       price: item.price,
       sale_price: item.sale_price,
-    });
+      created_by_role : 'admin',
+      admin_id : undefined
+    }
+
+    if(user.created_by) {
+      obj.created_by_role = "user"
+      obj.admin_id = user.created_by
+    }
+    const transactionItem = new TransactionItem(obj);
     
     await transactionItem.save();
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
@@ -295,7 +317,7 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
   for (const item of items) {
     description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)}) ${item.shipping ? '+ (🚚 ' + formatCurrency(item.shipping * item.qty) + ')' : ''}\n`;
     console.log("buyer_id***",buyer_id)
-    const transactionItem = new TransactionItem({
+    let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
       user_id: payload.user_id,
@@ -307,7 +329,14 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
       unit: item.unit,
       price: item.price,
       sale_price: item.sale_price,
-    });
+      created_by_role : 'admin',
+      admin_id : undefined
+    }
+    if(user.created_by) {
+      obj.created_by_role = "user"
+      obj.admin_id = user.created_by
+    }
+    const transactionItem = new TransactionItem(obj);
     console.log("buyer_id***",buyer_id)
     await transactionItem.save();
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
@@ -358,8 +387,7 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
   // Process each item
   for (const item of items) {
     description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)})\n`;
-    
-    const transactionItem = new TransactionItem({
+    let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
       user_id: payload.user_id,
@@ -371,7 +399,14 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
       unit: item.unit,
       price: item.price,
       sale_price: item.sale_price,
-    });
+      created_by_role : "admin",
+      admin_id : undefined
+    }
+    if(user.created_by) {
+      obj.created_by_role = "user"
+      obj.admin_id = user.created_by
+    }
+    const transactionItem = new TransactionItem(obj);
     
     await transactionItem.save();
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
@@ -462,7 +497,7 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
     }
 
     // Create base transaction
-    const transaction = await createTransaction(payload, transactionType);
+    const transaction = await createTransaction(payload, transactionType,user);
 
     // Process based on transaction type
     let result;

@@ -383,18 +383,59 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     const rawInventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
     const inventoryValue = rawInventoryValue.toFixed(2)
 
-    // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
-    const clientPayableAgg = await Buyer.aggregate([
+    // my clients total payable
+    const myclientPayableAgg = await Buyer.aggregate([
       { $match: { user_id: userObjectId, currentBalance: { $gt: 0 } } },
       { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
+    ]);
+    const myclientPayableBalances = myclientPayableAgg[0]?.outstanding || 0;
+
+    // Amount we owe: Sum of negative currentBalance from all Buyer documents.
+    const clientpayabletoMeAgg = await Buyer.aggregate([
+      { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
+      { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
+    ]);
+    const clientsPayabletoMeBalances = clientpayabletoMeAgg[0]?.outstanding || 0;
+
+    // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
+    const clientPayableAgg = await Buyer.aggregate([
+      {
+        $match: {
+          $or: [
+            { user_id: userObjectId },
+            { admin_id: userObjectId }
+          ],
+          currentBalance: { $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          outstanding: { $sum: "$currentBalance" }
+        }
+      }
     ]);
     const clientPayableBalances = clientPayableAgg[0]?.outstanding || 0;
 
     // Amount we owe: Sum of negative currentBalance from all Buyer documents.
     const companyPayableAgg = await Buyer.aggregate([
-      { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
-      { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
+      {
+        $match: {
+          $or: [
+            { user_id: userObjectId },
+            { admin_id: userObjectId }
+          ],
+          currentBalance: { $lt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          outstanding: { $sum: "$currentBalance" }
+        }
+      }
     ]);
+    
     const rawCompanyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
     const companyPayableBalance = (rawCompanyPayableBalance).toFixed(2)
 
@@ -443,6 +484,8 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
       // onlineBalance: formatNumber(user?.online_balance),
       companyBalance: formatNumber(companyBalance),
       other_balance: formatNumber(user?.other_balance),
+      my_clients_payable : formatNumber(myclientPayableBalances),
+      client_payable_to_me : Math.abs(formatNumber(clientsPayabletoMeBalances)),
 
       //manual_balance: formatNumber(user?.manual_balance),
       //other_munual_balance: (user?.other_munual_balance),

@@ -18,6 +18,8 @@ export interface IBuyer extends Document {
 const BuyerSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   firstName: { type: String, required: true },
+  admin_id: { type: Schema.Types.ObjectId, ref: 'User' }, // optional, only if created by an admin
+  created_by_role: { type: String, enum: ['user', 'admin'], default : "admin" }, // helps in filtering
   lastName: { type: String, 
   //  required: true 
   },

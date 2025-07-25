@@ -4,6 +4,7 @@ import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
 import { createActivity } from './activity';
 import { processTransaction } from '../utils/transactionHandler';
+import User from '../models/User';
 
 const router = Router();
 
@@ -108,7 +109,14 @@ router.post('/', async (req: Request, res: Response) => {
     //   return res.status(400).json({ error: 'Missing required field: currentBalance or startingBalance' });
     // }
 
-    const newBuyer = new Buyer(req.body);
+    const user = await User.findById(user_id)
+    let obj = {...req.body}
+    if(user.created_by) {
+      obj.created_by_role = "user"
+      obj.admin_id = user.created_by
+    }
+
+    const newBuyer = new Buyer(obj);
     await newBuyer.save();
 
     let c_balance = req.body.currentBalance || req.body.startingBalance || req.body?.balance
