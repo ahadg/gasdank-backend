@@ -384,18 +384,18 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     const inventoryValue = rawInventoryValue.toFixed(2)
 
     // my clients total payable
-    const myclientPayableAgg = await Buyer.aggregate([
-      { $match: { user_id: userObjectId, currentBalance: { $gt: 0 } } },
-      { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
-    ]);
-    const myclientPayableBalances = myclientPayableAgg[0]?.outstanding || 0;
+    // const myclientPayableAgg = await Buyer.aggregate([
+    //   { $match: { user_id: userObjectId, currentBalance: { $gt: 0 } } },
+    //   { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
+    // ]);
+    // const myclientPayableBalances = myclientPayableAgg[0]?.outstanding || 0;
 
-    // Amount we owe: Sum of negative currentBalance from all Buyer documents.
-    const clientpayabletoMeAgg = await Buyer.aggregate([
-      { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
-      { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
-    ]);
-    const clientsPayabletoMeBalances = clientpayabletoMeAgg[0]?.outstanding || 0;
+    // // Amount we owe: Sum of negative currentBalance from all Buyer documents.
+    // const clientpayabletoMeAgg = await Buyer.aggregate([
+    //   { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
+    //   { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
+    // ]);
+    // const clientsPayabletoMeBalances = clientpayabletoMeAgg[0]?.outstanding || 0;
 
     // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
     const clientPayableAgg = await Buyer.aggregate([
@@ -456,7 +456,7 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
     console.log('Raw inventoryValue:', inventoryValue);
     console.log('Raw clientPayableBalances:', clientPayableBalances);
     console.log('Raw companyPayableBalance:', companyPayableBalance);
-    console.log('User:', user || 0);
+    //console.log('User:', user || 0);
     console.log('Math.abs(companyPayableBalance):', Math.abs(companyPayableBalance));
 
     // Calculate company balance without floating-point precision issues
@@ -484,8 +484,8 @@ router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"),
       // onlineBalance: formatNumber(user?.online_balance),
       companyBalance: formatNumber(companyBalance),
       other_balance: formatNumber(user?.other_balance),
-      my_clients_payable : formatNumber(myclientPayableBalances),
-      client_payable_to_me : Math.abs(formatNumber(clientsPayabletoMeBalances)),
+      // my_clients_payable : formatNumber(myclientPayableBalances),
+      // client_payable_to_me : Math.abs(formatNumber(clientsPayabletoMeBalances)),
 
       //manual_balance: formatNumber(user?.manual_balance),
       //other_munual_balance: (user?.other_munual_balance),
