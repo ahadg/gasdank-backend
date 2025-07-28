@@ -14,15 +14,19 @@ router.use(authenticateJWT)
 
 // GET all sessions for a user
 router.get('/', async (req: Request, res: Response) => {
-  const { user_created_by } = req.query
+  const { user_created_by, status } = req.query
   console.log("user_created_by", user_created_by)
+  let query : any = {user_created_by}
+  if(status) {
+    query['status'] = status
+  }
   
   if (!user_created_by || !mongoose.Types.ObjectId.isValid(user_created_by as string)) {
     return res.status(400).json({ error: 'Invalid or missing user_created_by ID' })
   }
 
   try {
-    const sessions = await SampleViewingClient.find({ user_created_by }).populate("buyer_id")
+    const sessions = await SampleViewingClient.find(query).populate("buyer_id")
     res.status(200).json(sessions)
   } catch (err: any) {
     console.error('Error fetching sessions:', err)
