@@ -275,7 +275,9 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
     // Update inventory for restock
     if (transactionType === 'restock') {
       await Inventory.findByIdAndUpdate(item.inventory_id, { 
-        $inc: { qty: item.qty } 
+        $inc: { qty: item.qty },
+        shippingCost : item?.shipping,
+        price :  item?.price
       });
     }
   }
@@ -344,7 +346,9 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
     // Update inventory for restock
     if (transactionType === 'restock') {
       await Inventory.findByIdAndUpdate(item.inventory_id, { 
-        $inc: { qty: item.qty } 
+        $inc: { qty: item.qty } ,
+        shippingCost : item?.shipping,
+        price :  item?.price
       });
     }
   }

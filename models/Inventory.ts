@@ -3,7 +3,7 @@ import Category from './Category';
 
 export interface IInventory extends Document {
   product_id: string;
-  reference_number: number; // New field for auto-incrementing reference
+  reference_number: string; // New field for auto-incrementing reference
   user_id: mongoose.Types.ObjectId;
   user_created_by_id: mongoose.Types.ObjectId;
   buyer_id: mongoose.Types.ObjectId;
@@ -57,7 +57,7 @@ const InventorySchema: Schema = new Schema({
     default: generateProductId
   },
   reference_number: {
-    type: Number,
+    type: String,
     unique: true,
     //required: true
   },
