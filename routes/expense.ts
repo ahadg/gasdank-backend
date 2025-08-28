@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { createActivity } from './activity';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import Category from '../models/Category';
+import User from '../models/User';
 
 const router = express.Router();
 
@@ -32,6 +33,11 @@ router.post('/', async (req: Request, res: Response) => {
     if (!finalCategoryId) {
       return res.status(400).json({ error: 'Category ID or name is required' });
     }
+
+
+    await User.findByIdAndUpdate(user_id,{
+      $inc : {cash_balance : -amount }
+    });
 
     const expense: IExpense = new Expense({
       user_id,
