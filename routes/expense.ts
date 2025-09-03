@@ -5,8 +5,76 @@ import { createActivity } from './activity';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import Category from '../models/Category';
 import User from '../models/User';
+import Transaction from '../models/Transaction';
 
 const router = express.Router();
+
+// GET /api/summary/:userId?start=YYYY-MM-DD&end=YYYY-MM-DD
+router.get('/summary/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { start, end } = req.query;
+    console.log("userId",userId)
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    const startDate = start ? new Date(start as string) : new Date('1970-01-01');
+    const endDate = end ? new Date(end as string) : new Date();
+
+    // Fetch total profit from transactions
+    const profitAgg = await Transaction.aggregate([
+      {
+        $match: {
+          user_id: new mongoose.Types.ObjectId(userId),
+          deleted_at: null,
+          type: 'sale',
+          created_at: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalProfit: { $sum: '$profit' }
+        }
+      }
+    ]);
+
+    const totalProfit = profitAgg.length > 0 ? profitAgg[0].totalProfit : 0;
+
+    // Fetch total expenses
+    const expenseAgg = await Expense.aggregate([
+      {
+        $match: {
+          user_id: new mongoose.Types.ObjectId(userId),
+          created_at: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalExpenses: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const totalExpenses = expenseAgg.length > 0 ? expenseAgg[0].totalExpenses : 0;
+
+    // Revenue = Profit + Expenses
+    const totalRevenue = totalProfit + totalExpenses;
+
+    res.status(200).json({
+      totalRevenue,
+      totalProfit,
+      totalExpenses,
+      netProfit: totalProfit - totalExpenses
+    });
+  } catch (err) {
+    console.error('Error fetching summary:', err);
+    res.status(500).json({ error: 'Failed to fetch summary', details: err });
+  }
+});
+
 
 // POST a new expense
 router.post('/', async (req: Request, res: Response) => {
