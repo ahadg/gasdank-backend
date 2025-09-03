@@ -76,13 +76,18 @@ router.put('/aiedit', async (req: Request, res: Response) => {
   }
 });
 
+
+
+
+router.use(authenticateJWT);
+
 // POST /api/buyers - Create a new buyer
 router.post('/', async (req: Request, res: Response) => {
   try {
     const requiredFields = ['user_id', 'firstName', 
      // 'lastName', 'email', 'phone'
     ];
-
+  console.log("req.body",req.body)
     // Check if all required fields are present
     for (const field of requiredFields) {
       if (!req.body[field]) {
@@ -92,19 +97,28 @@ router.post('/', async (req: Request, res: Response) => {
 
     const { email,user_id } = req.body;
 
-    // Check if a buyer with the same email already exists
+    //Check if a buyer with the same email already exists
     // const existingBuyer = await Buyer.findOne({ email });
     // if (existingBuyer) {
     //   return res.status(400).json({ error: 'A buyer with this email already exists.' });
     // }
 
-    // Assign currentBalance and startingBalance if balance is provided
-    // if ('balance' in req.body || (!req.body.currentBalance || !req.body.startingBalance)) {
-    //   req.body.currentBalance = req.body.currentBalance ? req.body.balance : 0;
-    //   req.body.startingBalance = req.body.startingBalance ? req.body.balance : 0;
-    // }
+    //Assign currentBalance and startingBalance if balance is provided
+    // Assign currentBalance and startingBalance properly (support negative numbers)
+    if (req.body.balance !== undefined) {
+      if (req.body.currentBalance === undefined) {
+        req.body.currentBalance = req.body.balance
+      }
+      if (req.body.startingBalance === undefined) {
+        req.body.startingBalance = req.body.balance
+        //req.body.currentBalance = req.body.balance
+        req.body.currentBalance = 0
+        // alredy updating current balance in processPaymentTransaction function
+      }
+    }
 
-    // // Final validation
+
+    // Final validation
     // if (!req.body.currentBalance || !req.body.startingBalance) {
     //   return res.status(400).json({ error: 'Missing required field: currentBalance or startingBalance' });
     // }
@@ -115,7 +129,7 @@ router.post('/', async (req: Request, res: Response) => {
       obj.created_by_role = "user"
       obj.admin_id = user.created_by
     }
-
+    console.log("obj",obj)
     const newBuyer = new Buyer(obj);
     await newBuyer.save();
 
@@ -127,7 +141,7 @@ router.post('/', async (req: Request, res: Response) => {
           buyer_id: newBuyer?.id,
           payment: c_balance,
           "notes": "",
-          payment_direction: c_balance > 0 ?  "given" : "received" ,
+          payment_direction: c_balance < 0 ?  "given" : "received" ,
           type: "payment",
           payment_method: "Cash"
         })
@@ -146,11 +160,6 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-router.use(authenticateJWT);
-
-
 
 // GET /api/buyers - List all buyers or filter by "user_id" id (assumed as UID)
 router.get('/',checkAccess("wholesale","read"), async (req: Request, res: Response) => {
