@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Category from '../models/Category';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
+import User from '../models/User';
 
 const router = Router();
 router.use(authenticateJWT);
@@ -9,7 +10,14 @@ router.use(authenticateJWT);
 router.get('/:userid',checkAccess("config.categories","read"),async (req: Request, res: Response) => {
     try {
       const { userid } = req.params;
-      const categories = await Category.find({user_id : userid});
+      const user: any = await User.findById(userid);
+      let userid_admin = user?.created_by || null;
+      const query: any = {
+        $or: userid_admin
+          ? [{ user_id: userid }, { user_id: userid_admin }]
+          : [{ user_id: userid }],
+      };
+      const categories = await Category.find(query);
       res.status(200).json(categories);
     } catch (error) {
       res.status(500).json({ error });

@@ -167,8 +167,15 @@ router.get('/',checkAccess("wholesale","read"), async (req: Request, res: Respon
     // If a query parameter "UID" is provided, filter by it.
     const { user_id } = req.query;
     let buyers;
+    const user: any = await User.findById(user_id);
+    let userid_admin = user?.created_by || null;
+    const query: any = {
+      $or: userid_admin
+        ? [{ user_id: user_id }, { user_id: userid_admin }]
+        : [{ user_id: user_id }],
+    };
     if (user_id) {
-      buyers = await Buyer.find({ user_id });
+      buyers = await Buyer.find(query);
     } else {
       buyers = await Buyer.find();
     }

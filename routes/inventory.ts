@@ -51,12 +51,24 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
   try {
     const { userid } = req.params;
     const { category, page, limit, qty } = req.query;
-    
+
+    // find user
+    const user: any = await User.findById(userid);
+    let userid_admin = user?.created_by || null;
+
+    // pagination
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    const query: any = { user_id: userid };
+    // build query
+    const query: any = {
+      $or: userid_admin
+        ? [{ user_id: userid }, { user_id: userid_admin }]
+        : [{ user_id: userid }],
+    };
+
+    console.log("query",query)
 
     if (category) {
       query.category = category;
@@ -66,6 +78,7 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
       query.qty = { $gt: 0 };
     }
 
+    // fetch data
     const totalProducts = await Inventory.countDocuments(query);
     const products = await Inventory.find(query)
       .skip(skip)
@@ -84,41 +97,60 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
 });
 
 
+
 // GET /api/inventory/:userid/:buyerid
-router.get('/:userid/inventory/:buyerid',checkAccess("inventory","read"), async (req: Request, res: Response) => {
-  try {
-    const { userid,buyerid } = req.params;
-    const { category, page, limit } = req.query;
-    
-    // Convert page and limit to numbers (default values: page 1, limit 10)
-    const pageNum = parseInt(page as string, 10) || 1;
-    const limitNum = parseInt(limit as string, 10) || 10;
-    const skip = (pageNum - 1) * limitNum;
+router.get(
+  '/:userid/inventory/:buyerid',
+  checkAccess('inventory', 'read'),
+  async (req: Request, res: Response) => {
+    try {
+      const { userid /*, buyerid*/ } = req.params;
+      const { category, page, limit } = req.query;
 
-    // Build the query: always filter by user_id, add category filter if provided.
-    const query: any = { 
-      user_id: userid,
-      qty: { $gt: 0 } // Only products with quantity > 0
+      const user: any = await User.findById(userid).lean();
+      const userid_admin = user?.created_by || null;
+
+      // Pagination (defaults)
+      const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
+      const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 10, 1), 100);
+      const skip = (pageNum - 1) * limitNum;
+
+      // Build query
+      const query: any = {
+        // if user has an admin, allow either; otherwise just the user
+        ...(userid_admin
+          ? { $or: [{ user_id: userid }, { user_id: userid_admin }] }
+          : { user_id: userid }),
+        qty: { $gt: 0 },
       };
-    if (category) {
-      query.category =  category;
+
+      if (category) {
+        // If category is an ObjectId string in your schema, cast it:
+        // query.category = new Types.ObjectId(category as string);
+        query.category = category; // keep as-is if it's a string enum/ref name
+      }
+
+      const [totalProducts, products] = await Promise.all([
+        Inventory.countDocuments(query),
+        Inventory.find(query)
+          .skip(skip)
+          .limit(limitNum)
+          .populate('category')
+          .lean(),
+      ]);
+
+      res.status(200).json({
+        page: pageNum,
+        limit: limitNum,
+        totalProducts,
+        products,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
-
-    // Get total number of matching documents (for pagination metadata)
-    const totalProducts = await Inventory.countDocuments(query);
-    // Fetch paginated results
-    const products = await Inventory.find(query).skip(skip).limit(limitNum).populate("category");
-
-    res.status(200).json({
-      page: pageNum,
-      limit: limitNum,
-      totalProducts,
-      products
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
   }
-});
+);
+
 
 // GET /api/inventory/product/:id - Update a buyer by ID
 router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, res: Response) => {
