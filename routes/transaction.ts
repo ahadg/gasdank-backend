@@ -21,7 +21,7 @@ router.use(authenticateJWT);
 export const createlogs = (user:any,obj:any) => {
   createActivity({
     user_id : user?._id, 
-    user_created_by : user?.user_created_by,
+    user_created_by : user?.user_created_by || user?.created_by,
     worker_id : obj?.worker_id,
     action : "create",
     resource_type : obj?.type,

@@ -223,6 +223,7 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
   // Create logs
   createlogs(user, {
     buyer_id: payload.buyer_id,
+    user_created_by : user?.created_by,
     worker_id: payload.worker_id,
     transaction_id: transaction._id,
     type: 'payment',

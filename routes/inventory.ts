@@ -3,6 +3,7 @@ import Inventory from '../models/Inventory';
 import { authenticateJWT } from '../middlewares/authMiddleware';
 import checkAccess from '../middlewares/accessMiddleware';
 import User from '../models/User';
+import { createActivity } from './activity';
 
 const router = Router();
 router.use(authenticateJWT);
@@ -187,6 +188,15 @@ router.post('/',checkAccess("inventory","create"), async (req: Request, res: Res
     const the_user = await User.findById(req.user?.id)
     const newProduct = new Inventory({...req.body,user_created_by_id: the_user?.created_by});
     await newProduct.save();
+    createActivity({
+      user_id : req.user?.id, 
+      user_created_by: the_user?.created_by,
+      action: 'create',
+      resource_type: 'inventory',
+      page: 'inventory',
+      type: 'inventory_created',
+      description : `create new inventory ${req.body.name}`,
+    });
     res.status(201).json(newProduct);
   } catch (error) {
     console.log("error",error)
