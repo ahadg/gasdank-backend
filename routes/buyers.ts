@@ -148,7 +148,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
     createActivity({
       user_id : req.body?.user_id, 
-      //user_created_by: user_created_by_id,
+      user_created_by: user.created_by,
       action: 'create',
       resource_type: 'buyer',
       page: 'buyer',
