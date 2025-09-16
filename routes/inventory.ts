@@ -66,7 +66,7 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
     const query: any = {
       $or: userid_admin
         ? [{ user_id: userid }, { user_id: userid_admin }]
-        : [{ user_id: userid }],
+        : [{ user_id: userid }, {user_created_by_id : userid}],
     };
 
     console.log("query",query)
