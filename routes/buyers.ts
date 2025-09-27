@@ -5,6 +5,7 @@ import checkAccess from '../middlewares/accessMiddleware';
 import { createActivity } from './activity';
 import { processTransaction } from '../utils/transactionHandler';
 import User from '../models/User';
+import mongoose from 'mongoose';
 
 const router = Router();
 
@@ -105,17 +106,17 @@ router.post('/', async (req: Request, res: Response) => {
 
     //Assign currentBalance and startingBalance if balance is provided
     // Assign currentBalance and startingBalance properly (support negative numbers)
+    // Assign currentBalance and startingBalance properly (support negative numbers)
     if (req.body.balance !== undefined) {
       if (req.body.currentBalance === undefined) {
         req.body.currentBalance = req.body.balance
       }
       if (req.body.startingBalance === undefined) {
         req.body.startingBalance = req.body.balance
-        //req.body.currentBalance = req.body.balance
-        req.body.currentBalance = 0
-        // alredy updating current balance in processPaymentTransaction function
+        req.body.currentBalance = 0 // handled later by transactions
       }
     }
+
 
 
     // Final validation
@@ -161,29 +162,49 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/buyers - List all buyers or filter by "user_id" id (assumed as UID)
-router.get('/',checkAccess("wholesale","read"), async (req: Request, res: Response) => {
-  try {
-    // If a query parameter "UID" is provided, filter by it.
-    const { user_id } = req.query;
-    let buyers;
-    const user: any = await User.findById(user_id);
-    let userid_admin = user?.created_by || null;
-    const query: any = {
-      $or: userid_admin
-        ? [{ user_id: user_id }, { user_id: userid_admin }]
-        : [{ user_id: user_id }],
-    };
-    if (user_id) {
-      buyers = await Buyer.find(query);
-    } else {
-      buyers = await Buyer.find();
+// GET /api/buyers - List all buyers or filter by "user_id"
+router.get(
+  "/",
+  checkAccess("wholesale", "read"),
+  async (req: Request, res: Response) => {
+    try {
+      const { user_id } = req.query;
+      let buyers;
+
+      if (user_id) {
+        const user: any = await User.findById(user_id);
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        let userIds: mongoose.Types.ObjectId[] = [new mongoose.Types.ObjectId(String(user_id))];
+
+        if (user.role === "admin" || user.role === "superadmin") {
+          // find all users created by this admin
+          const createdUsers = await User.find(
+            { created_by: new mongoose.Types.ObjectId(user._id) },
+          )
+          const createdUserIds = createdUsers.map((u) => u._id);
+          userIds = [user._id, ...createdUserIds];
+        } else if (user.created_by) {
+          // normal user: include self + their admin
+          userIds = [user._id, user.created_by];
+        }
+
+        console.log("userIds",userIds)
+
+        buyers = await Buyer.find({ user_id: { $in: userIds } });
+      } else {
+        buyers = await Buyer.find();
+      }
+
+      res.status(200).json(buyers);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
-    res.status(200).json(buyers);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
   }
-});
+);
+
 
 // GET /api/buyers/:buyerid - Get buyers by id
 router.get('/:buyerid', async (req: Request, res: Response) => {

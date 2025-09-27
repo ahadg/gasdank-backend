@@ -13,48 +13,79 @@ const router = Router()
 router.use(authenticateJWT)
 
 // GET all sessions for a user
-router.get('/', async (req: Request, res: Response) => {
-  const { user_created_by, status } = req.query
-  console.log("user_created_by", user_created_by)
-  let query : any = {user_created_by}
-  if(status) {
-    query['status'] = status
+// helper: build accessible userIds list
+const getAccessibleUserIds = async (userId: string) => {
+  const user: any = await User.findById(userId);
+  if (!user) return [];
+
+  let userIds: mongoose.Types.ObjectId[] = [
+    new mongoose.Types.ObjectId(String(userId)),
+  ];
+
+  if (user.role === "admin") {
+    // admin → include all created users
+    const createdUsers = await User.find({ created_by: user._id }, { _id: 1 }).lean();
+    const createdUserIds = createdUsers.map((u) => u._id);
+    userIds = [user._id, ...createdUserIds];
+  } else if (user.created_by) {
+    // normal user → include self + admin
+    userIds = [user._id, user.created_by];
   }
-  
+
+  return userIds;
+};
+
+// GET all sessions for a user/admin
+router.get("/", async (req: Request, res: Response) => {
+  const { user_created_by, status } = req.query;
+
   if (!user_created_by || !mongoose.Types.ObjectId.isValid(user_created_by as string)) {
-    return res.status(400).json({ error: 'Invalid or missing user_created_by ID' })
+    return res.status(400).json({ error: "Invalid or missing user_created_by ID" });
   }
 
   try {
-    const sessions = await SampleViewingClient.find(query).populate("buyer_id")
-    res.status(200).json(sessions)
+    const userIds = await getAccessibleUserIds(user_created_by as string);
+
+    let query: any = { user_created_by: { $in: userIds } };
+    if (status) {
+      query.status = status;
+    }
+
+    const sessions = await SampleViewingClient.find(query).populate("buyer_id");
+    res.status(200).json(sessions);
   } catch (err: any) {
-    console.error('Error fetching sessions:', err)
-    res.status(500).json({ error: 'Failed to fetch sessions', details: err.message })
+    console.error("Error fetching sessions:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch sessions", details: err.message });
   }
-})
+});
 
 // GET all pending sessions for a worker
-router.get('/worker', async (req: Request, res: Response) => {
-  const { user_id } = req.query
-  console.log("_worker_user_id", user_id)
-  
+router.get("/worker", async (req: Request, res: Response) => {
+  const { user_id } = req.query;
+
   if (!user_id || !mongoose.Types.ObjectId.isValid(user_id as string)) {
-    return res.status(400).json({ error: 'Invalid or missing user_id' })
+    return res.status(400).json({ error: "Invalid or missing user_id" });
   }
 
   try {
-    const sessions = await SampleViewingClient.find({ 
-      user_id, 
-      status: "pending" 
-    }).populate("buyer_id")
-    console.log("sessions", sessions)
-    res.status(200).json(sessions)
+    const userIds = await getAccessibleUserIds(user_id as string);
+
+    const sessions = await SampleViewingClient.find({
+      user_id: { $in: userIds },
+      status: "pending",
+    }).populate("buyer_id");
+
+    res.status(200).json(sessions);
   } catch (err: any) {
-    console.error('Error fetching sessions:', err)
-    res.status(500).json({ error: 'Failed to fetch sessions', details: err.message })
+    console.error("Error fetching sessions:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch sessions", details: err.message });
   }
-})
+});
+
 
 // POST create a new viewing session
 router.post('/', async (req: Request, res: Response) => {

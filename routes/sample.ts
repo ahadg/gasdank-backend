@@ -20,27 +20,56 @@ const router = Router();
 router.use(authenticateJWT);
 
 // GET /api/samples?user_id=xxx — Get all samples for a user
-router.get('/', async (req: Request, res: Response) => {
-  const { user_id,status } = req.query;
+router.get("/", async (req: Request, res: Response) => {
+  const { user_id, status } = req.query;
 
   if (!user_id || !mongoose.Types.ObjectId.isValid(user_id as string)) {
-    return res.status(400).json({ error: 'Invalid or missing user_id' });
+    return res.status(400).json({ error: "Invalid or missing user_id" });
   }
 
   try {
-    let samples
-    if(status == "history") {
-      samples = await Sample.find({ user_id }).populate("buyer_id");
-    } else {
-      samples = await Sample.find({ user_id, status : "holding" }).populate("buyer_id");
+    const user: any = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
-   
+
+    let userIds: mongoose.Types.ObjectId[] = [
+      new mongoose.Types.ObjectId(String(user_id)),
+    ];
+
+    if (user.role === "admin" || user.role === "superadmin") {
+      // if admin → include all created users
+      const createdUsers = await User.find(
+        { created_by: user._id },
+        { _id: 1 }
+      ).lean();
+      const createdUserIds = createdUsers.map((u) => u._id);
+      userIds = [user._id, ...createdUserIds];
+    } else if (user.created_by) {
+      // if normal user → include self + their admin
+      userIds = [user._id, user.created_by];
+    }
+
+    let samples;
+    if (status === "history") {
+      samples = await Sample.find({ user_id: { $in: userIds } })
+        .populate("buyer_id");
+    } else {
+      samples = await Sample.find({
+        user_id: { $in: userIds },
+        status: "holding",
+      }).populate("buyer_id");
+    }
+
     res.status(200).json(samples);
   } catch (err: any) {
-    console.error('Error fetching samples:', err);
-    res.status(500).json({ error: 'Failed to fetch samples', details: err.message });
+    console.error("Error fetching samples:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch samples", details: err.message });
   }
 });
+
 
 
 router.post('/', async (req: Request, res: Response) => {
