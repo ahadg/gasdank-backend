@@ -281,220 +281,188 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   }
 });
 
-
-router.get('/stats/:user_id', authenticateJWT, checkAccess("dashboard", "read"), async (req: Request, res: Response) => {
-  try {
-    const { user_id } = req.params;
-    if (!user_id) {
-      return res.status(400).json({ error: "user_id parameter is required" });
-    }
-    const userObjectId = new mongoose.Types.ObjectId(user_id);
-
-    // Build a date filter if provided in the query parameters.
-    let dateFilter: any = {};
-    const startDate = req.query.startDate as string;
-    const endDate = req.query.endDate as string;
-    console.log({startDate,endDate})
-    if (startDate) {
-      dateFilter.$gte = new Date(startDate);
-    }
-    if (endDate) {
-      dateFilter.$lte = new Date(endDate);
-    }
-    // Only add the date condition if at least one date is provided.
-    const dateCondition = Object.keys(dateFilter).length > 0 ? { created_at: dateFilter } : {};
-
-    // 1. Total Sales: Sum of sale_price from "sale" transactions for this user.
-    const totalSalesAgg = await Transaction.aggregate([
-      { 
-        $match: { 
-          user_id: userObjectId, 
-          type: "sale", 
-          sale_price: { $exists: true },
-          ...dateCondition
-        } 
-      },
-      { $group: { _id: null, totalSales: { $sum: "$sale_price" } } }
-    ]);
-    const totalSales = (totalSalesAgg[0]?.totalSales || 0).toFixed(2)
-
-    // total return products
-    const totalSalesProductReturnAgg = await Transaction.aggregate([
-      { 
-        $match: { 
-          user_id: userObjectId, 
-          type: "return", 
-          sale_price: { $exists: true },
-          ...dateCondition
-        } 
-      },
-      { $group: { _id: null, totalSales: { $sum: "$sale_price" } } }
-    ]);
-    const totalSalesReturn = (totalSalesProductReturnAgg[0]?.totalSales || 0).toFixed(2)
-
-    // 2. Total Profit: Sum of profit from "sale" transactions for this user.
-    const totalProfitAgg = await Transaction.aggregate([
-      { 
-        $match: { 
-          user_id: userObjectId, 
-          type: "sale", 
-          profit: { $exists: true },
-          ...dateCondition
-        } 
-      },
-      { $group: { _id: null, totalProfit: { $sum: "$profit" } } }
-    ]);
-    const totalProfit = (totalProfitAgg[0]?.totalProfit || 0).toFixed(2)
-
-    // 2. Total Profit of return products: Sum of profit from "return" transactions for this user.
-    const totalProductReturnProfitAgg = await Transaction.aggregate([
-      { 
-        $match: { 
-          user_id: userObjectId, 
-          type: "return", 
-          profit: { $exists: true },
-          ...dateCondition
-        } 
-      },
-      { $group: { _id: null, totalProfit: { $sum: "$profit" } } }
-    ]);
-    const totalProfitReturn = (totalProductReturnProfitAgg[0]?.totalProfit || 0).toFixed(2)
-
-    // 3. Inventory Value: Sum over all Inventory documents (price * qty) for this user.
-    const inventoryValueAgg = await Inventory.aggregate([
-      { $match: { user_id: userObjectId } },
-      {
-        $group: {
-          _id: null,
-          inventoryValue: {
-            $sum: {
-              $multiply: [
-                { $add: ["$price", { $ifNull: ["$shippingCost", 0] }] },
-                "$qty"
-              ]
-            }
-          }
-        }
+router.get(
+  "/stats/:user_id",
+  authenticateJWT,
+  checkAccess("dashboard", "read"),
+  async (req: Request, res: Response) => {
+    try {
+      const { user_id } = req.params;
+      if (!user_id) {
+        return res.status(400).json({ error: "user_id parameter is required" });
       }
-    ]);
-    
-    
-    // Round inventory value to avoid floating point precision issues
-    const rawInventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
-    const inventoryValue = rawInventoryValue.toFixed(2)
 
-    // my clients total payable
-    // const myclientPayableAgg = await Buyer.aggregate([
-    //   { $match: { user_id: userObjectId, currentBalance: { $gt: 0 } } },
-    //   { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
-    // ]);
-    // const myclientPayableBalances = myclientPayableAgg[0]?.outstanding || 0;
-
-    // // Amount we owe: Sum of negative currentBalance from all Buyer documents.
-    // const clientpayabletoMeAgg = await Buyer.aggregate([
-    //   { $match: { user_id: userObjectId, currentBalance: { $lt: 0 } } },
-    //   { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } }
-    // ]);
-    // const clientsPayabletoMeBalances = clientpayabletoMeAgg[0]?.outstanding || 0;
-
-    // 4. Outstanding Balances: Sum of positive currentBalance from all Buyer documents (client payable).
-    const clientPayableAgg = await Buyer.aggregate([
-      {
-        $match: {
-          $or: [
-            { user_id: userObjectId },
-            { admin_id: userObjectId }
-          ],
-          currentBalance: { $gt: 0 }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          outstanding: { $sum: "$currentBalance" }
-        }
+      const userObjectId = new mongoose.Types.ObjectId(user_id);
+      const the_user = await User.findById(userObjectId);
+      if (!the_user) {
+        return res.status(400).json({ error: "User not found" });
       }
-    ]);
-    const clientPayableBalances = clientPayableAgg[0]?.outstanding || 0;
 
-    // Amount we owe: Sum of negative currentBalance from all Buyer documents.
-    const companyPayableAgg = await Buyer.aggregate([
-      {
-        $match: {
-          $or: [
-            { user_id: userObjectId },
-            { admin_id: userObjectId }
-          ],
-          currentBalance: { $lt: 0 }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          outstanding: { $sum: "$currentBalance" }
-        }
+      // Build list of user_ids to query
+      let userIds: mongoose.Types.ObjectId[] = [userObjectId];
+
+      if (the_user.role === "admin" || the_user.role === "superadmin") {
+        // find all users created by this admin
+        const createdUsers = await User.find(
+          { created_by: userObjectId },
+          { _id: 1 }
+        ).lean();
+
+        const createdUserIds = createdUsers.map((u) => u._id);
+        userIds = [userObjectId, ...createdUserIds as mongoose.Types.ObjectId[]]; // include self + created users
       }
-    ]);
-    
-    const rawCompanyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
-    const companyPayableBalance = (rawCompanyPayableBalance).toFixed(2)
 
-    // Get the logged-in user's financial details.
-    const user = await User.findById(userObjectId);
-    
-    // 6. Company Balance: Fixed calculation to avoid floating-point precision issues
-    console.log({
-      rawInventoryValue,
-      inventoryValue,
-      clientPayableBalances,
-      companyPayableBalance,
-      cash_balance: user?.cash_balance || 0
-    });
+      // Build a date filter if provided
+      let dateFilter: any = {};
+      const startDate = req.query.startDate as string;
+      const endDate = req.query.endDate as string;
 
-    // Debug: Log individual components for analysis
-    console.log('=== BALANCE CALCULATION DEBUG ===');
-    console.log('Raw inventoryValue:', inventoryValue);
-    console.log('Raw clientPayableBalances:', clientPayableBalances);
-    console.log('Raw companyPayableBalance:', companyPayableBalance);
-    //console.log('User:', user || 0);
-    console.log('Math.abs(companyPayableBalance):', Math.abs(companyPayableBalance));
+      if (startDate) {
+        dateFilter.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        dateFilter.$lte = new Date(endDate);
+      }
 
-    // Calculate company balance without floating-point precision issues
-    const rawCompanyBalance = Number(inventoryValue) + clientPayableBalances 
-    + (user?.cash_balance || 0) + Number(user?.other_balance?.EFT || 0) + Number(user?.other_balance?.Crypto || 0)
-    - Math.abs(Number(companyPayableBalance));
-    const companyBalance = rawCompanyBalance.toFixed(2)// Round to 2 decimal places
-    
-    console.log('Raw company balance calculation:', rawCompanyBalance);
-    console.log('Final company balance:', companyBalance);
-    console.log('=== END DEBUG ===');
+      const dateCondition =
+        Object.keys(dateFilter).length > 0 ? { created_at: dateFilter } : {};
 
-    // Helper function to safely format numbers
-    const formatNumber = (value: any): number => {
-      const num = Number(value) || 0;
-      return parseFloat(num.toFixed(2));
-    };
+      // === AGGREGATIONS ===
 
-    res.status(200).json({
-      totalSales: formatNumber(totalSales - totalSalesReturn),
-      totalProfit: formatNumber(totalProfit - totalProfitReturn),
-      inventoryValue: formatNumber(inventoryValue),
-      clientPayableBalances: formatNumber(clientPayableBalances),
-      companyPayableBalance: formatNumber(companyPayableBalance),
-      // onlineBalance: formatNumber(user?.online_balance),
-      companyBalance: formatNumber(companyBalance),
-      other_balance: formatNumber(user?.other_balance),
-      // my_clients_payable : formatNumber(myclientPayableBalances),
-      // client_payable_to_me : Math.abs(formatNumber(clientsPayabletoMeBalances)),
+      // Total Sales
+      const totalSalesAgg = await Transaction.aggregate([
+        {
+          $match: {
+            user_id: { $in: userIds },
+            type: "sale",
+            sale_price: { $exists: true },
+            ...dateCondition,
+          },
+        },
+        { $group: { _id: null, totalSales: { $sum: "$sale_price" } } },
+      ]);
+      const totalSales = totalSalesAgg[0]?.totalSales || 0;
 
-      //manual_balance: formatNumber(user?.manual_balance),
-      //other_munual_balance: (user?.other_munual_balance),
-      user : user
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+      // Total Return
+      const totalSalesProductReturnAgg = await Transaction.aggregate([
+        {
+          $match: {
+            user_id: { $in: userIds },
+            type: "return",
+            sale_price: { $exists: true },
+            ...dateCondition,
+          },
+        },
+        { $group: { _id: null, totalSales: { $sum: "$sale_price" } } },
+      ]);
+      const totalSalesReturn = totalSalesProductReturnAgg[0]?.totalSales || 0;
+
+      // Total Profit
+      const totalProfitAgg = await Transaction.aggregate([
+        {
+          $match: {
+            user_id: { $in: userIds },
+            type: "sale",
+            profit: { $exists: true },
+            ...dateCondition,
+          },
+        },
+        { $group: { _id: null, totalProfit: { $sum: "$profit" } } },
+      ]);
+      const totalProfit = totalProfitAgg[0]?.totalProfit || 0;
+
+      // Profit Return
+      const totalProductReturnProfitAgg = await Transaction.aggregate([
+        {
+          $match: {
+            user_id: { $in: userIds },
+            type: "return",
+            profit: { $exists: true },
+            ...dateCondition,
+          },
+        },
+        { $group: { _id: null, totalProfit: { $sum: "$profit" } } },
+      ]);
+      const totalProfitReturn =
+        totalProductReturnProfitAgg[0]?.totalProfit || 0;
+
+      // Inventory Value
+      const inventoryValueAgg = await Inventory.aggregate([
+        { $match: { user_id: { $in: userIds } } },
+        {
+          $group: {
+            _id: null,
+            inventoryValue: {
+              $sum: {
+                $multiply: [
+                  { $add: ["$price", { $ifNull: ["$shippingCost", 0] }] },
+                  "$qty",
+                ],
+              },
+            },
+          },
+        },
+      ]);
+      const rawInventoryValue = inventoryValueAgg[0]?.inventoryValue || 0;
+
+      // Client Payables (positive balances)
+      const clientPayableAgg = await Buyer.aggregate([
+        {
+          $match: {
+            $or: [{ user_id: { $in: userIds } }, { admin_id: { $in: userIds } }],
+            currentBalance: { $gt: 0 },
+          },
+        },
+        { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } },
+      ]);
+      const clientPayableBalances = clientPayableAgg[0]?.outstanding || 0;
+
+      // Company Payables (negative balances)
+      const companyPayableAgg = await Buyer.aggregate([
+        {
+          $match: {
+            $or: [{ user_id: { $in: userIds } }, { admin_id: { $in: userIds } }],
+            currentBalance: { $lt: 0 },
+          },
+        },
+        { $group: { _id: null, outstanding: { $sum: "$currentBalance" } } },
+      ]);
+      const rawCompanyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
+
+      // Get the logged-in user financials (main user_id)
+      const user = await User.findById(userObjectId);
+
+      // Final Balance Calculation
+      const rawCompanyBalance =
+        rawInventoryValue +
+        clientPayableBalances +
+        (user?.cash_balance || 0) +
+        Number(user?.other_balance?.EFT || 0) +
+        Number(user?.other_balance?.Crypto || 0) -
+        Math.abs(Number(rawCompanyPayableBalance));
+
+      // Helper formatter
+      const formatNumber = (value: any): number => {
+        const num = Number(value) || 0;
+        return parseFloat(num.toFixed(2));
+      };
+
+      res.status(200).json({
+        totalSales: formatNumber(totalSales - totalSalesReturn),
+        totalProfit: formatNumber(totalProfit - totalProfitReturn),
+        inventoryValue: formatNumber(rawInventoryValue),
+        clientPayableBalances: formatNumber(clientPayableBalances),
+        companyPayableBalance: formatNumber(rawCompanyPayableBalance),
+        companyBalance: formatNumber(rawCompanyBalance),
+        other_balance: user?.other_balance || {},
+        user,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   }
-});
+);
+
 
 
 export default router;
