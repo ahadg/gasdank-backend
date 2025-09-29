@@ -136,11 +136,14 @@ router.post('/', async (req: Request, res: Response) => {
 
     let c_balance = req.body.currentBalance || req.body.startingBalance || req.body?.balance
 
+    // converting -ve balance to +ve balance because in transactionHandler => processPaymentTransaction => buyerBalanceChange, so we always have to convert balance base 
+    // on recieved or given
+    const final_balance = Math.abs(c_balance)
     if(c_balance) {
         await processTransaction({
           user_id: user_id,
           buyer_id: newBuyer?.id,
-          payment: c_balance,
+          payment: final_balance,
           "notes": "",
           payment_direction: c_balance < 0 ?  "given" : "received" ,
           type: "payment",
