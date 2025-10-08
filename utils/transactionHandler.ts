@@ -38,6 +38,7 @@ export interface TransactionPayload {
   type?: 'sale' | 'return' | 'payment' | 'inventory_addition' | 'restock';
   payment_method?: string;
   items?: TransactionItemData[];
+  skip_cash_user_balance?: boolean;
 }
 
 export interface TransactionResult {
@@ -152,7 +153,7 @@ const updateUserBalance = async (userId: string, paymentMethod: string, amount: 
 /**
  * Process payment transaction
  */
-const processPaymentTransaction = async (transaction: any, payload: TransactionPayload, user: any, buyer: any): Promise<TransactionResult> => {
+const processPaymentTransaction = async (transaction: any, payload: TransactionPayload, user: any, buyer: any, skip_cash_user_balance: boolean = false): Promise<TransactionResult> => {
   const { payment, payment_direction = 'received', payment_method = 'unspecified' } = payload;
   console.log({ payment, payment_direction, payment_method })
 
@@ -212,9 +213,10 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
   await Buyer.findByIdAndUpdate(payload.buyer_id, {
     $inc: { currentBalance: buyerBalanceChange }
   });
-
+  if(!skip_cash_user_balance) {
   // Update user's balance
-  await updateUserBalance(payload.user_id, payment_method, payment, payment_direction);
+    await updateUserBalance(payload.user_id, payment_method, payment, payment_direction);
+  }
 
   // Link TransactionPayment to transaction
   transaction.transactionpayment_id = transactionPayment._id;
@@ -508,7 +510,7 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
     let result;
     switch (transactionType) {
       case 'payment':
-        result = await processPaymentTransaction(transaction, payload, user, buyer);
+        result = await processPaymentTransaction(transaction, payload, user, buyer, payload.skip_cash_user_balance);
         console.log("resultttt",result)
         if (!result.success) {
           return result; // Return error immediately

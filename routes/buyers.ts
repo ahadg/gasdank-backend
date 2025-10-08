@@ -147,7 +147,8 @@ router.post('/', async (req: Request, res: Response) => {
           "notes": "",
           payment_direction: c_balance < 0 ?  "given" : "received" ,
           type: "payment",
-          payment_method: "Cash"
+          payment_method: "Cash",
+          skip_cash_user_balance: true
         })
     }
     createActivity({
