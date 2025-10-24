@@ -435,12 +435,18 @@ router.get(
       // Final Balance Calculation
       const rawCompanyBalance =
         rawInventoryValue +
-        clientPayableBalances +
-        (user?.cash_balance || 0) +
-        Number(user?.other_balance?.EFT || 0) +
-        Number(user?.other_balance?.Crypto || 0) -
+        clientPayableBalances 
+        // +
+        // (user?.cash_balance || 0) +
+        // Number(user?.other_balance?.EFT || 0) +
+        // Number(user?.other_balance?.Crypto || 0) 
+        -
         Math.abs(Number(rawCompanyPayableBalance));
-
+      console.log({rawInventoryValue,clientPayableBalances, cash_balance : user?.cash_balance,
+        EFT:user?.other_balance?.EFT, Crypto : user?.other_balance?.Crypto,
+        rawCompanyPayableBalance,
+        finalCompanybalance : rawCompanyBalance
+      })
       // Helper formatter
       const formatNumber = (value: any): number => {
         const num = Number(value) || 0;
