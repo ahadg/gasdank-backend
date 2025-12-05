@@ -31,7 +31,7 @@ export interface TransactionPayload {
   total_shipping?: number;
   payment_direction?: 'received' | 'given';
   created_by_role?: string;
-  admin_id? : string;
+  admin_id?: string;
   sale_price?: number;
   profit?: number;
   notes?: string;
@@ -73,20 +73,20 @@ const validatePayload = (payload: TransactionPayload): { isValid: boolean; error
 const validateInventory = async (items: TransactionItemData[]): Promise<{ isValid: boolean; error?: string }> => {
   for (const item of items) {
     const inventoryItem = await Inventory.findById(item.inventory_id);
-    
+
     if (!inventoryItem) {
-      return { 
-        isValid: false, 
-        error: `Inventory item ${item.inventory_id} not found` 
+      return {
+        isValid: false,
+        error: `Inventory item ${item.inventory_id} not found`
       };
     }
 
     const requiredQty = item.qty * item.measurement;
-    
+
     if (inventoryItem.qty < requiredQty) {
-      return { 
-        isValid: false, 
-        error: `Insufficient inventory for product ${inventoryItem.name}. Available: ${inventoryItem.qty}, Required: ${requiredQty}` 
+      return {
+        isValid: false,
+        error: `Insufficient inventory for product ${inventoryItem.name}. Available: ${inventoryItem.qty}, Required: ${requiredQty}`
       };
     }
   }
@@ -96,13 +96,13 @@ const validateInventory = async (items: TransactionItemData[]): Promise<{ isVali
 /**
  * Create base transaction record
  */
-const createTransaction = async (payload: TransactionPayload, transactionType: string, user : any) => {
+const createTransaction = async (payload: TransactionPayload, transactionType: string, user: any) => {
   let obj = {
     user_id: payload.user_id,
     buyer_id: payload.buyer_id,
     worker_id: payload.worker_id,
     type: transactionType,
-    sale_id : payload.sale_id,
+    sale_id: payload.sale_id,
     notes: payload.notes,
     payment_method: payload.payment_method,
     price: payload.price || payload.payment,
@@ -111,10 +111,10 @@ const createTransaction = async (payload: TransactionPayload, transactionType: s
     total_shipping: payload.total_shipping?.toFixed(2),
     profit: payload.profit?.toFixed(2),
     items: [],
-    created_by_role : "admin",
-    admin_id : undefined
+    created_by_role: "admin",
+    admin_id: undefined
   }
-  if(user.created_by) {
+  if (user.created_by) {
     obj.created_by_role = "user"
     obj.admin_id = user.created_by
   }
@@ -133,19 +133,19 @@ const updateUserBalance = async (userId: string, paymentMethod: string, amount: 
   const adjustedAmount = direction === 'received' ? amount : -amount;
 
   if (paymentMethod === 'Cash') {
-    await User.findByIdAndUpdate(userId, { 
-      $inc: { cash_balance: adjustedAmount } 
+    await User.findByIdAndUpdate(userId, {
+      $inc: { cash_balance: adjustedAmount }
     });
   } else {
     // Initialize the nested key if it doesn't exist
     if (!user.other_balance?.hasOwnProperty(paymentMethod)) {
-      await User.findByIdAndUpdate(userId, { 
+      await User.findByIdAndUpdate(userId, {
         $set: { [`other_balance.${paymentMethod}`]: 0 }
       });
     }
-    
-    await User.findByIdAndUpdate(userId, { 
-      $inc: { [`other_balance.${paymentMethod}`]: adjustedAmount } 
+
+    await User.findByIdAndUpdate(userId, {
+      $inc: { [`other_balance.${paymentMethod}`]: adjustedAmount }
     });
   }
 };
@@ -157,13 +157,13 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
   const { payment, payment_direction = 'received', payment_method = 'unspecified' } = payload;
   console.log({ payment, payment_direction, payment_method })
 
-   // Check balance for outgoing payments
-   if (payment_direction === "given") {
+  // Check balance for outgoing payments
+  if (payment_direction === "given") {
     console.log("user?.cash_balance", user?.cash_balance);
-    
+
     let userBalance = 0;
     let balanceType = '';
-    
+
     if (payment_method === "EFT") {
       userBalance = user?.other_balance?.EFT || 0;
       balanceType = 'EFT';
@@ -174,13 +174,13 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
       userBalance = user?.cash_balance || 0;
       balanceType = 'Cash';
     }
-    
-    if (Number(payment) > userBalance) {
-      return {
-        success: false,
-        error: `Insufficient ${balanceType} balance. You only have ${userBalance} available.`,
-      };
-    }
+
+    // if (Number(payment) > userBalance) {
+    //   return {
+    //     success: false,
+    //     error: `Insufficient ${balanceType} balance. You only have ${userBalance} available.`,
+    //   };
+    // }
   }
   let obj = {
     transaction_id: transaction._id,
@@ -189,11 +189,11 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
     payment_direction,
     payment_method,
     payment_date: new Date(),
-    created_by_role : 'admin',
-    user_id : user?.id,
-    admin_id : undefined
+    created_by_role: 'admin',
+    user_id: user?.id,
+    admin_id: undefined
   }
-  if(user.created_by) {
+  if (user.created_by) {
     obj.created_by_role = "user"
     obj.admin_id = user.created_by
   }
@@ -213,8 +213,8 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
   await Buyer.findByIdAndUpdate(payload.buyer_id, {
     $inc: { currentBalance: buyerBalanceChange }
   });
-  if(!skip_cash_user_balance) {
-  // Update user's balance
+  if (!skip_cash_user_balance) {
+    // Update user's balance
     await updateUserBalance(payload.user_id, payment_method, payment, payment_direction);
   }
 
@@ -225,7 +225,7 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
   // Create logs
   createlogs(user, {
     buyer_id: payload.buyer_id,
-    user_created_by : user?.created_by,
+    user_created_by: user?.created_by,
     worker_id: payload.worker_id,
     transaction_id: transaction._id,
     type: 'payment',
@@ -262,25 +262,25 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
       unit: item.unit,
       price: item.price,
       sale_price: item.sale_price,
-      created_by_role : 'admin',
-      admin_id : undefined
+      created_by_role: 'admin',
+      admin_id: undefined
     }
 
-    if(user.created_by) {
+    if (user.created_by) {
       obj.created_by_role = "user"
       obj.admin_id = user.created_by
     }
     const transactionItem = new TransactionItem(obj);
-    
+
     await transactionItem.save();
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
 
     // Update inventory for restock
     if (transactionType === 'restock') {
-      await Inventory.findByIdAndUpdate(item.inventory_id, { 
+      await Inventory.findByIdAndUpdate(item.inventory_id, {
         $inc: { qty: item.qty },
-        shippingCost : item?.shipping,
-        price :  item?.price
+        shippingCost: item?.shipping,
+        price: item?.price
       });
     }
   }
@@ -293,8 +293,8 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
   const roundBalance = Number(price) + Number(totalShippingVal);
 
   // Update buyer's balance
-  await Buyer.findByIdAndUpdate(buyer_id, { 
-    $inc: { currentBalance: -roundBalance } 
+  await Buyer.findByIdAndUpdate(buyer_id, {
+    $inc: { currentBalance: -roundBalance }
   });
 
   // Update transaction with item IDs
@@ -321,7 +321,7 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
   // Process each item
   for (const item of items) {
     description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)}) ${item.shipping ? '+ (🚚 ' + formatCurrency(item.shipping * item.qty) + ')' : ''}\n`;
-    console.log("buyer_id***",buyer_id)
+    console.log("buyer_id***", buyer_id)
     let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
@@ -334,24 +334,24 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
       unit: item.unit,
       price: item.price,
       sale_price: item.sale_price,
-      created_by_role : 'admin',
-      admin_id : undefined
+      created_by_role: 'admin',
+      admin_id: undefined
     }
-    if(user.created_by) {
+    if (user.created_by) {
       obj.created_by_role = "user"
       obj.admin_id = user.created_by
     }
     const transactionItem = new TransactionItem(obj);
-    console.log("buyer_id***",buyer_id)
+    console.log("buyer_id***", buyer_id)
     await transactionItem.save();
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
 
     // Update inventory for restock
     if (transactionType === 'restock') {
-      await Inventory.findByIdAndUpdate(item.inventory_id, { 
-        $inc: { qty: item.qty } ,
-        shippingCost : item?.shipping,
-        price :  item?.price
+      await Inventory.findByIdAndUpdate(item.inventory_id, {
+        $inc: { qty: item.qty },
+        shippingCost: item?.shipping,
+        price: item?.price
       });
     }
   }
@@ -406,39 +406,39 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
       unit: item.unit,
       price: item.price,
       sale_price: item.sale_price,
-      created_by_role : "admin",
-      admin_id : undefined
+      created_by_role: "admin",
+      admin_id: undefined
     }
-    if(user.created_by) {
+    if (user.created_by) {
       obj.created_by_role = "user"
       obj.admin_id = user.created_by
     }
     const transactionItem = new TransactionItem(obj);
-    
+
     await transactionItem.save();
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
 
     // Calculate inventory change
-    const qtyChange = transactionType === 'return' 
-      ? (item.qty * item.measurement) 
+    const qtyChange = transactionType === 'return'
+      ? (item.qty * item.measurement)
       : -(item.qty * item.measurement);
 
     // Update buyer's balance
     if (transactionType === 'sale') {
       const saleAmount = Number((item.sale_price * item.measurement * item.qty).toFixed(2));
-      await Buyer.findByIdAndUpdate(buyer_id, { 
-        $inc: { currentBalance: saleAmount } 
+      await Buyer.findByIdAndUpdate(buyer_id, {
+        $inc: { currentBalance: saleAmount }
       });
     } else if (transactionType === 'return') {
       const returnAmount = -((item.price * item.measurement * item.qty) + (item.qty * (item.shipping || 0)));
-      await Buyer.findByIdAndUpdate(buyer_id, { 
-        $inc: { currentBalance: Number(returnAmount.toFixed(2)) } 
+      await Buyer.findByIdAndUpdate(buyer_id, {
+        $inc: { currentBalance: Number(returnAmount.toFixed(2)) }
       });
     }
 
     // Update inventory
-    await Inventory.findByIdAndUpdate(item.inventory_id, { 
-      $inc: { qty: qtyChange } 
+    await Inventory.findByIdAndUpdate(item.inventory_id, {
+      $inc: { qty: qtyChange }
     });
 
     // Check for low inventory
@@ -504,14 +504,14 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
     }
 
     // Create base transaction
-    const transaction = await createTransaction(payload, transactionType,user);
+    const transaction = await createTransaction(payload, transactionType, user);
 
     // Process based on transaction type
     let result;
     switch (transactionType) {
       case 'payment':
         result = await processPaymentTransaction(transaction, payload, user, buyer, payload.skip_cash_user_balance);
-        console.log("resultttt",result)
+        console.log("resultttt", result)
         if (!result.success) {
           return result; // Return error immediately
         }
@@ -529,9 +529,9 @@ export const processTransaction = async (payload: TransactionPayload): Promise<T
         break;
       default: // sale, return
         result = await processSaleReturnTransaction(transaction, payload, user, buyer, transactionType);
-        // if (result && !result.success) {
-        //   return result;
-        // }
+      // if (result && !result.success) {
+      //   return result;
+      // }
     }
 
     return {

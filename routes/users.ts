@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticateJWT, AuthRequest } from '../middlewares/authMiddleware';
 import User from '../models/User';
-import userSchema,{userSignupSchema} from '../schemas/user';
+import userSchema, { userSignupSchema } from '../schemas/user';
 import bcrypt from 'bcrypt';
 import Transaction from '../models/Transaction';
 import Inventory from '../models/Inventory';
@@ -11,6 +11,13 @@ import checkAccess from '../middlewares/accessMiddleware';
 import { createActivity } from './activity';
 import SystemSettings from '../models/SystemSettings';
 import { adminDefaultAccess } from '../utils/helpers';
+import Activity from '../models/Activity';
+import Expense from '../models/Expense';
+import Notification from '../models/notification';
+import Sample from '../models/Sample';
+import SampleViewingClients from '../models/SampleViewingClients';
+import TransactionItem from '../models/TransactionItem';
+import TransactionPayment from '../models/TransactionPayment';
 
 import { setUserResetToken, verifyTokenAndUpdatePassword } from '../utils/passwordReset';
 import { sendPasswordEmail } from '../utils/sendEmail';
@@ -22,15 +29,15 @@ const router = Router();
 const saltRounds = 10;
 
 // GET /api/users - get all users
-router.get('/',authenticateJWT, checkAccess("config.users","read"), async (req: Request, res: Response) => {
-  console.log("user",req.user)
+router.get('/', authenticateJWT, checkAccess("config.users", "read"), async (req: Request, res: Response) => {
+  console.log("user", req.user)
   try {
     const the_user = await User.findById(req.user?.id)
     let users;
-    if(the_user.role === "superadmin") {
+    if (the_user.role === "superadmin") {
       users = await User.find();
     } else {
-      users = await User.find({created_by : req.user?.id});
+      users = await User.find({ created_by: req.user?.id });
     }
     res.status(200).json(users);
   } catch (error) {
@@ -39,22 +46,22 @@ router.get('/',authenticateJWT, checkAccess("config.users","read"), async (req: 
 });
 
 // GET /api/users/me - get a specific user by ID
-router.get('/me', authenticateJWT, async (req: any, res: Response) => { 
+router.get('/me', authenticateJWT, async (req: any, res: Response) => {
 
   try {
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.status(200).json({user});
+    res.status(200).json({ user });
   } catch (error) {
-    console.log("error",error)
+    console.log("error", error)
     res.status(500).json({ error });
   }
 });
 
 // GET /api/users/:id - get a specific user by ID
-router.get('/:id',authenticateJWT,checkAccess("config.users","read"), async (req: Request, res: Response) => {
+router.get('/:id', authenticateJWT, checkAccess("config.users", "read"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -70,11 +77,11 @@ router.get('/:id',authenticateJWT,checkAccess("config.users","read"), async (req
 
 
 // POST /api/users - create a new user
-router.post('/',authenticateJWT,checkAccess("config.users","create"), async (req: Request, res: Response) => {
+router.post('/', authenticateJWT, checkAccess("config.users", "create"), async (req: Request, res: Response) => {
   try {
     // Validate request body against schema
     const { error, value } = userSchema.validate(req.body);
-    console.log("req.body",req.body)
+    console.log("req.body", req.body)
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
@@ -96,13 +103,13 @@ router.post('/',authenticateJWT,checkAccess("config.users","create"), async (req
 
     // create activity 
     createActivity({
-      user_id : newUser?._id, 
-      user_created_by : req.user?.id,
-      action : "create",
-      resource_type : 'user',
-      page : "user",
-      type : "user_created",
-      description : `A new user ${value?.email} created`,
+      user_id: newUser?._id,
+      user_created_by: req.user?.id,
+      action: "create",
+      resource_type: 'user',
+      page: "user",
+      type: "user_created",
+      description: `A new user ${value?.email} created`,
     })
     res.status(201).json(newUser);
   } catch (error: any) {
@@ -113,7 +120,7 @@ router.post('/',authenticateJWT,checkAccess("config.users","create"), async (req
 // Public Signup: No need to checkAccess middleware here
 router.post('/signup', async (req: Request, res: Response) => {
   try {
-    console.log("req.body",req.body)
+    console.log("req.body", req.body)
     // Validate request body
     const { error, value } = userSignupSchema.validate(req.body)
     if (error) {
@@ -146,7 +153,7 @@ router.post('/signup', async (req: Request, res: Response) => {
     // Validate selected plan
     const systemSettings = await SystemSettings.findOne()
     const validPlan = systemSettings?.plans?.find(
-      (p : any) => p.name.toLowerCase() === value.plan.toLowerCase()
+      (p: any) => p.name.toLowerCase() === value.plan.toLowerCase()
     )
     if (!validPlan) {
       return res.status(400).json({ error: 'Selected plan is invalid' })
@@ -187,7 +194,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
 
 // PATCH /api/users/:id - update a user (with password hashing if password is provided)
-router.patch('/:id',authenticateJWT,checkAccess("config.users","edit"), async (req: Request, res: Response) => {
+router.patch('/:id', authenticateJWT, checkAccess("config.users", "edit"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -196,9 +203,9 @@ router.patch('/:id',authenticateJWT,checkAccess("config.users","edit"), async (r
     if (updateData.password) {
       updateData.password = await bcrypt.hash(updateData.password, saltRounds);
     } else {
-       delete updateData.password
+      delete updateData.password
     }
-    console.log("updateData",updateData)
+    console.log("updateData", updateData)
     const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
     if (!updatedUser) {
       return res.status(404).json({ message: 'User not found' });
@@ -211,7 +218,7 @@ router.patch('/:id',authenticateJWT,checkAccess("config.users","edit"), async (r
 
 // PUT /api/users - update a user (alternative update route without password logic)
 // You can choose to remove this route if you prefer using the PATCH route above.
-router.put('/',authenticateJWT, async (req: Request, res: Response) => {
+router.put('/', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { id, ...updateData } = req.body;
     const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
@@ -221,7 +228,7 @@ router.put('/',authenticateJWT, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:user_id',authenticateJWT, async (req: Request, res: Response) => {
+router.put('/:user_id', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
     const updatedUser = await User.findByIdAndUpdate(user_id, req.body, { new: true });
@@ -232,7 +239,7 @@ router.put('/:user_id',authenticateJWT, async (req: Request, res: Response) => {
 });
 
 // DELETE /api/users - soft delete a user
-router.delete('/', authenticateJWT, checkAccess("config","delete") ,async (req: Request, res: Response) => {
+router.delete('/', authenticateJWT, checkAccess("config", "delete"), async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     await User.findByIdAndUpdate(id, { deleted_at: new Date() });
@@ -255,7 +262,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     }
 
     const resetLink = `${FRONTEND_URL}/auth/reset-password?token=${rawToken}`;
-    console.log("resetLink***",resetLink)
+    console.log("resetLink***", resetLink)
     await sendPasswordEmail(email, resetLink);
 
     res.status(200).json({ message: 'If the email exists, a reset link was sent.' });
@@ -435,17 +442,18 @@ router.get(
       // Final Balance Calculation
       const rawCompanyBalance =
         rawInventoryValue +
-        clientPayableBalances 
+        clientPayableBalances
         // +
         // (user?.cash_balance || 0) +
         // Number(user?.other_balance?.EFT || 0) +
         // Number(user?.other_balance?.Crypto || 0) 
         -
         Math.abs(Number(rawCompanyPayableBalance));
-      console.log({rawInventoryValue,clientPayableBalances, cash_balance : user?.cash_balance,
-        EFT:user?.other_balance?.EFT, Crypto : user?.other_balance?.Crypto,
+      console.log({
+        rawInventoryValue, clientPayableBalances, cash_balance: user?.cash_balance,
+        EFT: user?.other_balance?.EFT, Crypto: user?.other_balance?.Crypto,
         rawCompanyPayableBalance,
-        finalCompanybalance : rawCompanyBalance
+        finalCompanybalance: rawCompanyBalance
       })
       // Helper formatter
       const formatNumber = (value: any): number => {
@@ -468,6 +476,197 @@ router.get(
     }
   }
 );
+
+// DELETE /api/users/clean-data/:user_id - Clean all data for a specific user
+router.delete(
+  "/clean-data/:user_id",
+  authenticateJWT,
+  //checkAccess("config.users", "delete"),
+  async (req: Request, res: Response) => {
+    try {
+      const { user_id } = req.params;
+
+      if (!user_id) {
+        return res.status(400).json({ error: "user_id parameter is required" });
+      }
+
+      const userObjectId = new mongoose.Types.ObjectId(user_id);
+
+      // Verify user exists
+      const user = await User.findById(userObjectId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Start deletion process
+      const deletionResults: any = {
+        user_id,
+        deleted: {},
+        errors: []
+      };
+
+      try {
+        // Delete Activities
+        const activityResult = await Activity.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { user_created_by: userObjectId }
+          ]
+        });
+        deletionResults.deleted.activities = activityResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Activity', error: error.message });
+      }
+
+      try {
+        // Delete Buyers
+        const buyerResult = await Buyer.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { admin_id: userObjectId }
+          ]
+        });
+        deletionResults.deleted.buyers = buyerResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Buyer', error: error.message });
+      }
+
+      try {
+        // Delete Expenses
+        const expenseResult = await Expense.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { user_created_by_id: userObjectId }
+          ]
+        });
+        deletionResults.deleted.expenses = expenseResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Expense', error: error.message });
+      }
+
+      try {
+        // Delete Inventory
+        const inventoryResult = await Inventory.deleteMany({ user_id: userObjectId });
+        deletionResults.deleted.inventory = inventoryResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Inventory', error: error.message });
+      }
+
+      try {
+        // Delete Notifications
+        const notificationResult = await Notification.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { actorId: userObjectId }
+          ]
+        });
+        deletionResults.deleted.notifications = notificationResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Notification', error: error.message });
+      }
+
+      try {
+        // Delete Samples
+        const sampleResult = await Sample.deleteMany({ user_id: userObjectId });
+        deletionResults.deleted.samples = sampleResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Sample', error: error.message });
+      }
+
+      try {
+        // Delete SampleViewingClients
+        const sampleViewingResult = await SampleViewingClients.deleteMany({ user_id: userObjectId });
+        deletionResults.deleted.sampleViewingClients = sampleViewingResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'SampleViewingClients', error: error.message });
+      }
+
+      try {
+        // Delete TransactionItems
+        const transactionItemResult = await TransactionItem.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { admin_id: userObjectId }
+          ]
+        });
+        deletionResults.deleted.transactionItems = transactionItemResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'TransactionItem', error: error.message });
+      }
+
+      try {
+        // Delete TransactionPayments
+        const transactionPaymentResult = await TransactionPayment.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { admin_id: userObjectId }
+          ]
+        });
+        deletionResults.deleted.transactionPayments = transactionPaymentResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'TransactionPayment', error: error.message });
+      }
+
+      try {
+        // Delete Transactions
+        const transactionResult = await Transaction.deleteMany({
+          $or: [
+            { user_id: userObjectId },
+            { admin_id: userObjectId }
+          ]
+        });
+        deletionResults.deleted.transactions = transactionResult.deletedCount;
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'Transaction', error: error.message });
+      }
+
+      try {
+        // Reset User balances
+        const userUpdateResult = await User.findByIdAndUpdate(
+          userObjectId,
+          {
+            $set: {
+              cash_balance: 0,
+              other_balance: {}
+            }
+          },
+          { new: true }
+        );
+        deletionResults.userBalancesReset = true;
+        deletionResults.updatedUser = {
+          cash_balance: userUpdateResult?.cash_balance,
+          other_balance: userUpdateResult?.other_balance
+        };
+      } catch (error: any) {
+        deletionResults.errors.push({ model: 'User', error: error.message });
+        deletionResults.userBalancesReset = false;
+      }
+
+      // Log the cleanup activity
+      createActivity({
+        user_id: userObjectId,
+        user_created_by: req.user?.id,
+        action: 'delete',
+        resource_type: 'user_data',
+        page: 'user',
+        type: 'user_data_cleanup',
+        description: `All data cleaned for user ${user.email}`,
+      });
+
+      res.status(200).json({
+        message: 'User data cleanup completed',
+        ...deletionResults
+      });
+
+    } catch (error: any) {
+      console.error('User data cleanup error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+
+
 
 
 

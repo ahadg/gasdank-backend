@@ -85,10 +85,10 @@ router.use(authenticateJWT);
 // POST /api/buyers - Create a new buyer
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const requiredFields = ['user_id', 'firstName', 
-     // 'lastName', 'email', 'phone'
+    const requiredFields = ['user_id', 'firstName',
+      // 'lastName', 'email', 'phone'
     ];
-  console.log("req.body",req.body)
+    console.log("req.body", req.body)
     // Check if all required fields are present
     for (const field of requiredFields) {
       if (!req.body[field]) {
@@ -96,13 +96,15 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
 
-    const { email,user_id } = req.body;
+    const { email, user_id } = req.body;
 
     //Check if a buyer with the same email already exists
-    // const existingBuyer = await Buyer.findOne({ email });
-    // if (existingBuyer) {
-    //   return res.status(400).json({ error: 'A buyer with this email already exists.' });
-    // }
+    if (email) {
+      const existingBuyer = await Buyer.findOne({ email });
+      if (existingBuyer) {
+        return res.status(400).json({ error: 'A Client with this email already exists.' });
+      }
+    }
 
     //Assign currentBalance and startingBalance if balance is provided
     // Assign currentBalance and startingBalance properly (support negative numbers)
@@ -125,40 +127,78 @@ router.post('/', async (req: Request, res: Response) => {
     // }
 
     const user = await User.findById(user_id)
-    let obj = {...req.body}
-    if(user.created_by) {
+
+    // Validate balance BEFORE creating buyer
+    let c_balance = req.body.currentBalance || req.body.startingBalance || req.body?.balance
+    const final_balance = Math.abs(c_balance)
+    const payment_direction = c_balance < 0 ? "given" : "received"
+    const payment_method = req.body.payment_method || "Cash"
+
+    // Check balance for outgoing payments (same logic as in processPaymentTransaction)
+    // if (c_balance && payment_direction === "given") {
+    //   let userBalance = 0;
+    //   let balanceType = '';
+
+    //   if (payment_method === "EFT") {
+    //     userBalance = user?.other_balance?.EFT || 0;
+    //     balanceType = 'EFT';
+    //   } else if (payment_method === "Crypto") {
+    //     userBalance = user?.other_balance?.Crypto || 0;
+    //     balanceType = 'Crypto';
+    //   } else if (payment_method === "Cash") {
+    //     userBalance = user?.cash_balance || 0;
+    //     balanceType = 'Cash';
+    //   }
+
+    //   if (Number(final_balance) > userBalance) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       error: `Insufficient ${balanceType} balance. You only have ${userBalance} available.`,
+    //     });
+    //   }
+    // }
+
+    // Now create the buyer
+    let obj = { ...req.body }
+    if (user.created_by) {
       obj.created_by_role = "user"
       obj.admin_id = user.created_by
     }
-    console.log("obj",obj)
+    console.log("obj", obj)
     const newBuyer = new Buyer(obj);
     await newBuyer.save();
 
-    let c_balance = req.body.currentBalance || req.body.startingBalance || req.body?.balance
-
+    // Process transaction if balance is provided
     // converting -ve balance to +ve balance because in transactionHandler => processPaymentTransaction => buyerBalanceChange, so we always have to convert balance base 
     // on recieved or given
-    const final_balance = Math.abs(c_balance)
-    if(c_balance) {
-        await processTransaction({
-          user_id: user_id,
-          buyer_id: newBuyer?.id,
-          payment: final_balance,
-          "notes": "",
-          payment_direction: c_balance < 0 ?  "given" : "received" ,
-          type: "payment",
-          payment_method: "Cash",
-          skip_cash_user_balance: true
-        })
+    if (c_balance) {
+      const transactionResult = await processTransaction({
+        user_id: user_id,
+        buyer_id: newBuyer?.id,
+        payment: final_balance,
+        "notes": "",
+        payment_direction: payment_direction,
+        type: "payment",
+        payment_method: payment_method,
+        skip_cash_user_balance: true
+      })
+
+      // Check if transaction failed and return error
+      if (!transactionResult.success) {
+        return res.status(400).json({
+          success: false,
+          error: transactionResult.error
+        });
+      }
     }
     createActivity({
-      user_id : req.body?.user_id, 
+      user_id: req.body?.user_id,
       user_created_by: user.created_by,
       action: 'create',
       resource_type: 'buyer',
       page: 'buyer',
       type: 'client_created',
-      description : `${req.body.firstName} ${req.body.lastName} client created`,
+      description: `${req.body.firstName} ${req.body.lastName} client created`,
     });
     res.status(201).json(newBuyer);
   } catch (error: any) {
@@ -195,7 +235,7 @@ router.get(
           userIds = [user._id, user.created_by];
         }
 
-        console.log("userIds",userIds)
+        console.log("userIds", userIds)
 
         buyers = await Buyer.find({ user_id: { $in: userIds } });
       } else {
@@ -240,7 +280,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 
 // DELETE /api/buyers/:id - Delete a buyer by ID (optional)
-router.delete('/:id',checkAccess("wholesale","delete"), async (req: Request, res: Response) => {
+router.delete('/:id', checkAccess("wholesale", "delete"), async (req: Request, res: Response) => {
   try {
     const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
     if (!deletedBuyer) {
@@ -254,15 +294,15 @@ router.delete('/:id',checkAccess("wholesale","delete"), async (req: Request, res
 
 // GET /api/buyers/transaction/:id - Delete a buyer by ID (optional)
 router.get('/:id', async (req: Request, res: Response) => {
-    try {
-      const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
-      if (!deletedBuyer) {
-        return res.status(404).json({ message: 'Buyer not found' });
-      }
-      res.status(200).json({ message: 'Buyer deleted successfully' });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+  try {
+    const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
+    if (!deletedBuyer) {
+      return res.status(404).json({ message: 'Buyer not found' });
     }
+    res.status(200).json({ message: 'Buyer deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // GET /api/buyers/:id - Delete a buyer by ID (optional)
