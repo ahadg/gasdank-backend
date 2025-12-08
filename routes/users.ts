@@ -443,10 +443,10 @@ router.get(
       const rawCompanyBalance =
         rawInventoryValue +
         clientPayableBalances
-        // +
-        // (user?.cash_balance || 0) +
+        +
+        Number(user?.cash_balance || 0) +
         // Number(user?.other_balance?.EFT || 0) +
-        // Number(user?.other_balance?.Crypto || 0) 
+        // Number(user?.other_balance?.Crypto || 0)
         -
         Math.abs(Number(rawCompanyPayableBalance));
       console.log({

@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = 'mongodb://admin:mong67ggGHH%40!*@209.126.2.137:27017/wholesaleapp?authSource=admin&readPreference=primary&directConnection=true&ssl=false'
+const MONGODB_URI = 'mongodb://localhost:27017/wholesaleapp'
+//'mongodb://admin:mong67ggGHH%40!*@209.126.2.137:27017/wholesaleapp?authSource=admin&readPreference=primary&directConnection=true&ssl=false'
 //process.env.MONGODB_URI as string;
 if (!MONGODB_URI) {
-  console.log("MONGODB_URI",MONGODB_URI)
+  console.log("MONGODB_URI", MONGODB_URI)
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
@@ -28,7 +29,7 @@ async function dbConnect() {
     console.log('Using cached MongoDB connection.');
     return cached.conn;
   }
-  
+
   // Create new connection promise if none exists
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI, {
@@ -37,7 +38,7 @@ async function dbConnect() {
       // useUnifiedTopology: true,
     });
   }
-  
+
   try {
     cached.conn = await cached.promise;
     console.log('Successfully connected to MongoDB.');

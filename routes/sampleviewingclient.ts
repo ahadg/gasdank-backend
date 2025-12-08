@@ -110,7 +110,7 @@ router.post('/', async (req: Request, res: Response) => {
     await newSession.save();
 
     const newActivity = await createActivity({
-      user_id: user_created_by, 
+      user_id: user_created_by,
       buyer_id: buyer_id,
       action: "create",
       resource_type: "sample",
@@ -119,7 +119,7 @@ router.post('/', async (req: Request, res: Response) => {
       type: "sample_viewing_assigned",
       description: `Assigned a new sample viewing session with ${items.length} item${items.length > 1 ? 's' : ''}`,
     })
-    
+
     try {
       // Notification for the assigned worker
       const workerNotification = new Notification({
@@ -151,8 +151,8 @@ router.post('/', async (req: Request, res: Response) => {
 router.patch('/:sessionId/status', async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params
-    const { status,transaction_id } = req.body
-    console.log("req.body",req.body)
+    const { status, transaction_id } = req.body
+    console.log(":sessionId/status req.body", req.body)
     if (!status || !['pending', 'accepted', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be pending, accepted, or rejected' })
     }
@@ -161,14 +161,14 @@ router.patch('/:sessionId/status', async (req: Request, res: Response) => {
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
     // Update session status
-    // session.status = status
-    // await session.save()
-    console.log("req.user",req.user)
+    session.status = status
+    await session.save()
+    console.log("req.user", req.user)
     const the_user = await User.findById(req.user?.id);
     // Create activity log for the status update
     try {
       const productSummary = session.items
-        .map((p : any) => `"${p.name.trim()}" (x${p.qty})`)
+        .map((p: any) => `"${p.name.trim()}" (x${p.qty})`)
         .join(', ');
       // create activity logs for admin
       await createActivity({
@@ -188,7 +188,7 @@ router.patch('/:sessionId/status', async (req: Request, res: Response) => {
       await createActivity({
         user_id: req.user?.id,
         buyer_id: session.buyer_id,
-        action: "update", 
+        action: "update",
         transaction_id,
         resource_type: "sample",
         resource_id: session._id,
@@ -198,20 +198,20 @@ router.patch('/:sessionId/status', async (req: Request, res: Response) => {
       })
 
       // notify client
-      const buyer = await Buyer.findById(session.buyer_id)
-      sendSMS({
-        to : buyer?.phone,
-        message : `Sample "${status}" by ${the_user?.name}. Products: ${productSummary}.`
-      })
+      // const buyer = await Buyer.findById(session.buyer_id)
+      // sendSMS({
+      //   to: buyer?.phone,
+      //   message: `Sample "${status}" by ${the_user?.name}. Products: ${productSummary}.`
+      // })
 
-      
+
     } catch (activityError) {
       console.error('Error creating activity:', activityError)
       // Don't fail the request if activity logging fails
     }
 
-    res.status(200).json({ 
-      message: `Session status updated to ${status} successfully`, 
+    res.status(200).json({
+      message: `Session status updated to ${status} successfully`,
       session: await SampleViewingClient.findById(sessionId).populate("buyer_id")
     })
   } catch (err: any) {
