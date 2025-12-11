@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = 'mongodb://localhost:27017/wholesaleapp'
-//'mongodb://admin:mong67ggGHH%40!*@209.126.2.137:27017/wholesaleapp?authSource=admin&readPreference=primary&directConnection=true&ssl=false'
+const MONGODB_URI = process.env.MONGODB_URI as string;
 //process.env.MONGODB_URI as string;
 if (!MONGODB_URI) {
   console.log("MONGODB_URI", MONGODB_URI)

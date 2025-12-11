@@ -1,3 +1,7 @@
+import dotenv from 'dotenv';
+// Load environment variables
+dotenv.config();
+
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
@@ -5,13 +9,10 @@ import helmet from 'helmet';
 import hpp from 'hpp';
 import morgan from 'morgan';
 import compression from 'compression';
-import dotenv from 'dotenv';
 
 import dbConnect from './utils/dbConnect';
 import redisClient from './utils/redisClient';
 
-// Load environment variables
-dotenv.config();
 
 // Import route modules
 import authRoutes from './routes/auth';
@@ -56,7 +57,7 @@ dbConnect();
 
 // Health check endpoint
 app.get("/api/status", (req, res) => {
-    res.status(200).json({ "status": "ok v3" });
+  res.status(200).json({ "status": "ok v3" });
 });
 
 // Mount routes
