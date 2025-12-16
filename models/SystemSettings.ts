@@ -49,7 +49,6 @@ const SystemSettingsSchema = new Schema({
   updated_at: { type: Date, default: Date.now },
 });
 
-// Auto-update `updated_at`
 SystemSettingsSchema.pre('save', function (next) {
   this.updated_at = new Date();
   next();

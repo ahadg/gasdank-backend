@@ -19,7 +19,7 @@ import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
 //import dashboardRoutes from './routes/dashboard';
 import buyersRoutes from './routes/buyers';
-import personalSettingsRoutes from './routes/personalSettingsRoutes';
+import personalSettingsRoutes from './routes/personalSettings';
 import stripesRoutes from './routes/stripe';
 import webhookRoutes from './routes/webhook';
 import systemsettingsRoutes from './routes/systemsetting';

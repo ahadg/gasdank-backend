@@ -7,11 +7,6 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN!
 );
 
-// Example usage 
-// sendSMS({
-//     to: recipient.phone,
-//     message: `Hello ${recipient.name}, your order is ready!`,
-//   });
 
 export const sendSMS = async ({
   to,
@@ -49,19 +44,19 @@ export const sendSMS = async ({
 
 // Format phone number for Twilio (ensure it starts with country code)
 export const formatPhoneNumber = (phone: string): string => {
-    if (!phone) return '';
-    
-    // Remove all non-digit characters
-    const cleaned = phone.replace(/\D/g, '');
-    
-    // If it doesn't start with country code, assume US (+1)
-    if (cleaned.length === 10) {
-      return `+1${cleaned}`;
-    } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
-      return `+${cleaned}`;
-    } else if (!cleaned.startsWith('+')) {
-      return `+${cleaned}`;
-    }
-    
-    return cleaned;
+  if (!phone) return '';
+
+  // Remove all non-digit characters
+  const cleaned = phone.replace(/\D/g, '');
+
+  // If it doesn't start with country code, assume US (+1)
+  if (cleaned.length === 10) {
+    return `+1${cleaned}`;
+  } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+    return `+${cleaned}`;
+  } else if (!cleaned.startsWith('+')) {
+    return `+${cleaned}`;
   }
+
+  return cleaned;
+}

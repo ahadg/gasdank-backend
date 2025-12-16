@@ -1,6 +1,3 @@
-// First, install the required packages:
-// npm install @langchain/core @langchain/openai @langchain/langgraph @langchain/community redis
-
 import { ChatOpenAI } from "@langchain/openai";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
@@ -148,10 +145,10 @@ ERROR responses examples:
 
 // Helper function to check if message has tool calls
 function hasToolCalls(message: BaseMessage): boolean {
-  return message instanceof AIMessage && 
-         'tool_calls' in message && 
-         Array.isArray((message as any).tool_calls) && 
-         (message as any).tool_calls.length > 0;
+  return message instanceof AIMessage &&
+    'tool_calls' in message &&
+    Array.isArray((message as any).tool_calls) &&
+    (message as any).tool_calls.length > 0;
 }
 
 // Helper function to get tool calls from message
@@ -193,7 +190,7 @@ function serializeMessages(messages: BaseMessage[]): string {
       id: msg.id
     };
   });
-  
+
   return JSON.stringify(serialized);
 }
 
@@ -201,7 +198,7 @@ function serializeMessages(messages: BaseMessage[]): string {
 function deserializeMessages(serialized: string): BaseMessage[] {
   try {
     const parsed = JSON.parse(serialized);
-    
+
     return parsed.map((msg: any) => {
       switch (msg.type) {
         case 'human':
@@ -241,9 +238,9 @@ function deserializeMessages(serialized: string): BaseMessage[] {
 // Storage manager class
 class ConversationStorage {
   private memoryStore = new Map<string, BaseMessage[]>();
-  
+
   async getMessages(
-    conversationKey: string, 
+    conversationKey: string,
     options: StorageOptions
   ): Promise<BaseMessage[]> {
     // Force memory storage if Redis is ignored or not connected
@@ -251,7 +248,7 @@ class ConversationStorage {
       console.log(`📖 Retrieved conversation from memory: ${conversationKey}`);
       return this.memoryStore.get(conversationKey) || [];
     }
-    
+
     if (options.useRedis && redisClient) {
       try {
         const serialized = await redisClient.get(`conversation:${conversationKey}`);
@@ -266,25 +263,25 @@ class ConversationStorage {
         return this.memoryStore.get(conversationKey) || [];
       }
     }
-    
+
     console.log(`📖 Retrieved conversation from memory: ${conversationKey}`);
     return this.memoryStore.get(conversationKey) || [];
   }
-  
+
   async saveMessages(
-    conversationKey: string, 
-    messages: BaseMessage[], 
+    conversationKey: string,
+    messages: BaseMessage[],
     options: StorageOptions
   ): Promise<void> {
     // Always save to memory as backup
     this.memoryStore.set(conversationKey, messages);
-    
+
     // Skip Redis if ignored or not connected
     if (ignoreRedis || !redisConnected || !options.useRedis) {
       console.log(`💾 Saved conversation to memory: ${conversationKey}`);
       return;
     }
-    
+
     if (options.useRedis && redisClient) {
       try {
         const serialized = serializeMessages(messages);
@@ -299,20 +296,20 @@ class ConversationStorage {
       console.log(`💾 Saved conversation to memory: ${conversationKey}`);
     }
   }
-  
+
   async clearConversation(
-    conversationKey: string, 
+    conversationKey: string,
     options: StorageOptions
   ): Promise<void> {
     // Always clear from memory
     this.memoryStore.delete(conversationKey);
-    
+
     // Skip Redis if ignored or not connected
     if (ignoreRedis || !redisConnected || !options.useRedis) {
       console.log(`🗑️ Cleared conversation from memory: ${conversationKey}`);
       return;
     }
-    
+
     if (options.useRedis && redisClient) {
       try {
         await redisClient.del(`conversation:${conversationKey}`);
@@ -321,7 +318,7 @@ class ConversationStorage {
         console.error('❌ Redis delete error:', error);
       }
     }
-    
+
     console.log(`🗑️ Cleared conversation from memory: ${conversationKey}`);
   }
 }
@@ -333,7 +330,7 @@ const conversationStorage = new ConversationStorage();
 function deduplicateMessages(messages: BaseMessage[]): BaseMessage[] {
   const seen = new Set();
   const deduplicated: BaseMessage[] = [];
-  
+
   for (const message of messages) {
     // Create a unique key for each message
     let key: string;
@@ -347,13 +344,13 @@ function deduplicateMessages(messages: BaseMessage[]): BaseMessage[] {
     } else {
       key = `${message.constructor.name}:${message.content}`;
     }
-    
+
     if (!seen.has(key)) {
       seen.add(key);
       deduplicated.push(message);
     }
   }
-  
+
   return deduplicated;
 }
 
@@ -362,7 +359,7 @@ function validateAndCleanMessages(messages: BaseMessage[]): BaseMessage[] {
   const cleaned = deduplicateMessages(messages);
   const pendingToolCalls = new Map<string, any>();
   const validatedMessages: BaseMessage[] = [];
-  
+
   for (const message of cleaned) {
     if (hasToolCalls(message)) {
       // AI message with tool calls
@@ -382,23 +379,23 @@ function validateAndCleanMessages(messages: BaseMessage[]): BaseMessage[] {
       validatedMessages.push(message);
     }
   }
-  
+
   return validatedMessages;
 }
 
 // Define the agent function
 async function callModel(state: AgentState): Promise<Partial<AgentState>> {
   console.log("🤖 callModel - Processing", state.messages.length, "messages");
-  
+
   // FIXED: Clean and validate messages before sending to LLM
   const cleanedMessages = validateAndCleanMessages(state.messages);
-  
+
   // Prepare messages for the LLM
   const messages = [
     { role: "system", content: systemMessage },
     ...cleanedMessages
   ];
-  
+
   try {
     console.log("🤖 callModel - llmWithTools_invoke", "passing_userId,sessionId");
     const response = await llmWithTools.invoke(messages, {
@@ -409,7 +406,7 @@ async function callModel(state: AgentState): Promise<Partial<AgentState>> {
     });
     console.log("🤖 callModel - response received");
     console.log("✅ Model response received, has tool calls:", hasToolCalls(response));
-    
+
     // FIXED: Return cleaned messages plus new response
     return { messages: [...cleanedMessages, response] };
   } catch (error) {
@@ -424,22 +421,22 @@ async function callModel(state: AgentState): Promise<Partial<AgentState>> {
 // Define the tool execution function
 async function callTools(state: AgentState): Promise<Partial<AgentState>> {
   console.log("🔧 callTools - Executing tools");
-  
+
   const lastMessage = state.messages[state.messages.length - 1];
-  
+
   if (!hasToolCalls(lastMessage)) {
     console.log("⚠️ No tool calls found in last message");
     return { messages: state.messages };
   }
-  
+
   const toolCalls = getToolCalls(lastMessage);
   console.log("🛠️ Found", toolCalls.length, "tool calls");
-  
+
   const toolMessages: BaseMessage[] = [];
-  
+
   for (const toolCall of toolCalls) {
     console.log("⚙️ Executing tool:", toolCall.name);
-    
+
     try {
       let result: any;
       const toolConfig = {
@@ -476,37 +473,37 @@ async function callTools(state: AgentState): Promise<Partial<AgentState>> {
           result = await addExpenseTool.invoke(toolCall.args, toolConfig);
           break;
         default:
-          result = { 
-            success: false, 
-            error: `Unknown tool: ${toolCall.name}` 
+          result = {
+            success: false,
+            error: `Unknown tool: ${toolCall.name}`
           };
       }
-      
+
       // FIXED: Create proper ToolMessage response with correct structure
       const toolMessage = new ToolMessage({
         tool_call_id: toolCall.id,
         name: toolCall.name,
         content: JSON.stringify(result)
       });
-      
+
       toolMessages.push(toolMessage);
       console.log("✅ Tool executed successfully:", toolCall.name);
-      
+
     } catch (error: unknown) {
       console.error("❌ Tool execution error:", error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       const toolMessage = new ToolMessage({
         tool_call_id: toolCall.id,
         name: toolCall.name,
-        content: JSON.stringify({ 
-          success: false, 
-          error: errorMessage 
+        content: JSON.stringify({
+          success: false,
+          error: errorMessage
         })
       });
       toolMessages.push(toolMessage);
     }
   }
-  
+
   console.log("🔧 Tool execution complete, returning", toolMessages.length, "tool messages");
   return { messages: [...state.messages, ...toolMessages] };
 }
@@ -514,27 +511,27 @@ async function callTools(state: AgentState): Promise<Partial<AgentState>> {
 // FIXED: Improved conditional edge function
 function shouldContinue(state: AgentState): string {
   const lastMessage = state.messages[state.messages.length - 1];
-  
+
   console.log("🔀 shouldContinue - Last message type:", lastMessage.constructor.name);
-  
+
   // If the last message is an AI message with tool calls, go to tools
   if (hasToolCalls(lastMessage)) {
     console.log("➡️ Going to tools");
     return "tools";
   }
-  
+
   // If the last message is a tool message, we need to go back to the agent
   if (lastMessage instanceof ToolMessage) {
     console.log("➡️ Tool message received, going back to agent");
     return "agent";
   }
-  
+
   // If it's a regular AI message without tool calls, we're done
   if (lastMessage instanceof AIMessage) {
     console.log("🏁 Ending conversation - AI response without tool calls");
     return END;
   }
-  
+
   // Default case - should not happen
   console.log("🏁 Ending conversation - default case");
   return END;
@@ -577,14 +574,14 @@ const app = workflow.compile();
 function cleanConversationHistory(messages: BaseMessage[]): BaseMessage[] {
   // Keep only the last 10 complete exchanges to prevent memory bloat
   const maxMessages = 20;
-  
+
   if (messages.length <= maxMessages) {
     return validateAndCleanMessages(messages);
   }
-  
+
   // Find a good cutoff point (after a complete exchange)
   let cutoffIndex = messages.length - maxMessages;
-  
+
   // Move cutoff to after a human message to maintain conversation flow
   for (let i = cutoffIndex; i < messages.length; i++) {
     if (messages[i] instanceof HumanMessage) {
@@ -592,18 +589,18 @@ function cleanConversationHistory(messages: BaseMessage[]): BaseMessage[] {
       break;
     }
   }
-  
+
   return validateAndCleanMessages(messages.slice(cutoffIndex));
 }
 
 // Main chat endpoint
 router.post('/chat', async (req: Request, res: Response) => {
   try {
-    const { 
-      userMessage, 
-      userId, 
-      sessionID, 
-      useRedis = false, 
+    const {
+      userMessage,
+      userId,
+      sessionID,
+      useRedis = false,
       redisExpiry = 86400 // 60 seconds * 60 minutes * 24 hours = 86400 seconds
     } = req.body;
 
@@ -614,12 +611,12 @@ router.post('/chat', async (req: Request, res: Response) => {
       });
     }
 
-    console.log("💬 New chat request:", { 
-      userId, 
-      sessionID, 
-      useRedis: useRedis && !ignoreRedis && redisConnected, 
+    console.log("💬 New chat request:", {
+      userId,
+      sessionID,
+      useRedis: useRedis && !ignoreRedis && redisConnected,
       redisExpiry,
-      message: userMessage.substring(0, 50) + "..." 
+      message: userMessage.substring(0, 50) + "..."
     });
 
     // Storage options - force memory if Redis is ignored
@@ -686,7 +683,7 @@ router.post('/chat', async (req: Request, res: Response) => {
 router.post('/chat/clear', async (req: Request, res: Response) => {
   try {
     const { userId, sessionID, useRedis = false } = req.body;
-    
+
     if (!userId || !sessionID) {
       return res.status(400).json({
         success: false,
@@ -695,10 +692,10 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
     }
 
     const conversationKey = `${userId}-${sessionID}`;
-    const storageOptions: StorageOptions = { 
-      useRedis: useRedis && !ignoreRedis && redisConnected 
+    const storageOptions: StorageOptions = {
+      useRedis: useRedis && !ignoreRedis && redisConnected
     };
-    
+
     await conversationStorage.clearConversation(conversationKey, storageOptions);
 
     res.json({
@@ -721,7 +718,7 @@ router.post('/chat/clear', async (req: Request, res: Response) => {
 router.get('/health', async (req: Request, res: Response) => {
   try {
     let redisStatus = 'disabled';
-    
+
     if (!ignoreRedis && redisClient) {
       try {
         await redisClient.ping();

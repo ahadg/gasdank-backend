@@ -15,9 +15,9 @@ const NotificationSchema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true }, // recipient
   actorId: { type: Schema.Types.ObjectId, ref: 'User' }, // person who triggered it
   type: { type: String, required: true }, // e.g., 'comment_reply', 'mention', 'follow'
-  message: { type: String },              // Optional pre-rendered message
+  message: { type: String },
   isRead: { type: Boolean, default: false },
-  activityId: { type: Schema.Types.ObjectId, ref: 'Activity' }, // optional
+  activityId: { type: Schema.Types.ObjectId, ref: 'Activity' },
   createdAt: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });

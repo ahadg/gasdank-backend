@@ -10,7 +10,7 @@ import OpenAI from 'openai';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Make sure to set this in your environment variables
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 const router = Router();
@@ -26,7 +26,7 @@ interface AuthenticatedRequest extends Request {
 router.get('/sparkline-data', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-             
+
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
@@ -132,7 +132,7 @@ router.get('/sparkline-data', async (req: AuthenticatedRequest, res: Response) =
         total: totalExpenses
       }
     });
-      
+
   } catch (error) {
     console.error('Error fetching sparkline data:', error);
     res.status(500).json({ error: 'Failed to fetch sparkline data', details: error });
@@ -660,7 +660,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
     // Updated seasonal detection for 3-month periods
     const detectSeasonality = (data: number[]) => {
       if (data.length < 3) return { seasonal: false, factor: 1 };
-      
+
       // Simple seasonal detection for 3-month data
       const avgValue = data.reduce((a, b) => a + b, 0) / data.length;
       const variance = data.reduce((sum, val) => sum + Math.pow(val - avgValue, 2), 0) / data.length;
@@ -675,8 +675,8 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
     // Updated forecast calculation for 3-month data
     const calculateRealisticForecast = (historicalData: number[], metric: string) => {
       if (historicalData.length === 0) {
-        return { 
-          values: new Array(forecastMonths).fill(0), 
+        return {
+          values: new Array(forecastMonths).fill(0),
           confidence: 10,
           method: 'no_data'
         };
@@ -685,8 +685,8 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
       // Filter out zero values for better analysis
       const nonZeroData = historicalData.filter(val => val > 0);
       if (nonZeroData.length === 0) {
-        return { 
-          values: new Array(forecastMonths).fill(0), 
+        return {
+          values: new Array(forecastMonths).fill(0),
           confidence: 10,
           method: 'no_sales'
         };
@@ -697,10 +697,10 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
 
       // Method 1: Linear Regression
       const regression = calculateLinearRegression(xValues, yValues);
-      
+
       // Method 2: Exponential Smoothing
       const smoothedValue = exponentialSmoothing(yValues);
-      
+
       // Method 3: Moving Average (use all available data for 3-month period)
       const movingAverage = yValues.reduce((a, b) => a + b, 0) / yValues.length;
 
@@ -717,10 +717,10 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
       for (let i = 1; i <= forecastMonths; i++) {
         // Linear regression prediction
         const regPrediction = regression.slope * (nonZeroData.length + i) + regression.intercept;
-        
+
         // Exponential smoothing prediction (with slight decay for realism)
         const smoothPrediction = smoothedValue * Math.pow(0.98, i - 1);
-        
+
         // Moving average prediction (with trend adjustment)
         const trendAdjustment = (regression.slope * i) / 2;
         const maPrediction = movingAverage + trendAdjustment;
@@ -741,7 +741,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
 
         // Apply realistic constraints
         combinedPrediction = Math.max(0, combinedPrediction);
-        
+
         // Add some randomness/uncertainty for distant forecasts (reduced for shorter baseline)
         const uncertainty = 1 + (0.08 * i * Math.random() - 0.04 * i);
         combinedPrediction *= uncertainty;
@@ -776,7 +776,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
     // Fill missing months with zeros for complete time series (last 3 months only)
     const monthlyData: { [key: string]: MonthlyDataItem } = {};
     const currentDate = new Date();
-    
+
     // Initialize last 3 months with zero
     for (let i = 2; i >= 0; i--) {
       const date = new Date(currentDate);
@@ -805,7 +805,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
       }
     });
 
-    const monthlyArray = Object.values(monthlyData).sort((a, b) => 
+    const monthlyArray = Object.values(monthlyData).sort((a, b) =>
       a.year - b.year || a.month - b.month
     );
 
@@ -835,7 +835,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
     for (let i = 1; i <= forecastMonths; i++) {
       const futureDate = new Date(today);
       futureDate.setMonth(today.getMonth() + i);
-      
+
       const predictedRevenue = revenueForecast.values[i - 1] || 0;
       const predictedProfit = profitForecast.values[i - 1] || 0;
       const predictedTransactions = transactionForecast.values[i - 1] || 0;
@@ -872,7 +872,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
     const productForecasts: { [key: string]: ProductForecast } = {};
     productSales.forEach(product => {
       const monthlySales = Math.max(0, Math.ceil(product.avgMonthlySales));
-      
+
       let predictedSales = monthlySales;
       let confidence = 40;
 
@@ -885,7 +885,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
 
       const daysOfStock = monthlySales > 0 ? Math.round(product.currentStock / (monthlySales / 30)) : 999;
       const avgOrderValue = product.totalSold > 0 ? product.revenue / product.totalSold : 0;
-      
+
       productForecasts[product._id.toString()] = {
         name: product.productName,
         currentStock: product.currentStock,
@@ -903,7 +903,7 @@ router.get('/forecasting', async (req: AuthenticatedRequest, res: Response) => {
     const totalRevenue = revenueData.reduce((sum, val) => sum + val, 0);
     const totalProfit = profitData.reduce((sum, val) => sum + val, 0);
     const totalTransactions = transactionData.reduce((sum, val) => sum + val, 0);
-    
+
     const marketMetrics = {
       customerLifetimeValue: totalTransactions > 0 ? Math.round((totalRevenue / totalTransactions) * 2.5) : 0,
       inventoryTurnover: totalRevenue > 0 ? Math.round((totalRevenue / Math.max(500, totalRevenue * 0.6)) * 10) / 10 : 0,
@@ -1055,7 +1055,7 @@ router.get('/low-stock-products', async (req: AuthenticatedRequest, res: Respons
 router.post('/ai-suggestions', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
@@ -1144,7 +1144,7 @@ router.post('/ai-suggestions', async (req: AuthenticatedRequest, res: Response) 
             user_id: new mongoose.Types.ObjectId(userId),
             deleted_at: null,
             type: 'sale',
-            created_at: { 
+            created_at: {
               $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) // 6 months
             }
           }
@@ -1289,8 +1289,8 @@ router.post('/ai-suggestions', async (req: AuthenticatedRequest, res: Response) 
 
   } catch (error) {
     console.error('Error generating AI suggestions:', error);
-    res.status(500).json({ 
-      error: 'Failed to generate AI suggestions', 
+    res.status(500).json({
+      error: 'Failed to generate AI suggestions',
       details: process.env.NODE_ENV === 'development' ? error : 'Internal server error'
     });
   }
@@ -1350,7 +1350,7 @@ Focus on actionable, data-driven insights that can directly improve revenue, red
     });
 
     const aiResponse = response.choices[0].message.content;
-    
+
     // Parse the AI response
     let parsedSuggestions;
     try {
@@ -1436,7 +1436,7 @@ function generateBusinessSuggestions(context: any) {
   if (context.topProducts.length > 0) {
     const topProduct = context.topProducts[0];
     const revenueShare = (topProduct.revenue / context.totalRevenue) * 100;
-    
+
     if (revenueShare > 30) {
       suggestions.push({
         type: 'product',

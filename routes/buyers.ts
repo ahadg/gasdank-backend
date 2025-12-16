@@ -10,32 +10,6 @@ import mongoose from 'mongoose';
 const router = Router();
 
 
-// ✅ Example 1: Update by Email
-// json
-// Copy
-// Edit
-// {
-//   "identifier": "niaz@gmail.com",
-//   "phone": "03001234567",
-//   "currentBalance": 1200
-// }
-// ✅ Example 2: Update by First Name
-// json
-// Copy
-// Edit
-// {
-//   "identifier": "Niaz",
-//   "lastName": "Ahmed",
-//   "startingBalance": 1500
-// }
-// ✅ Example 3: Update by Last Name
-// json
-// Copy
-// Edit
-// {
-//   "identifier": "Ahmed",
-//   "email": "newemail@example.com"
-// }
 router.put('/aiedit', async (req: Request, res: Response) => {
   try {
     const { identifier, ...updateFields } = req.body;
@@ -134,29 +108,6 @@ router.post('/', async (req: Request, res: Response) => {
     const payment_direction = c_balance < 0 ? "given" : "received"
     const payment_method = req.body.payment_method || "Cash"
 
-    // Check balance for outgoing payments (same logic as in processPaymentTransaction)
-    // if (c_balance && payment_direction === "given") {
-    //   let userBalance = 0;
-    //   let balanceType = '';
-
-    //   if (payment_method === "EFT") {
-    //     userBalance = user?.other_balance?.EFT || 0;
-    //     balanceType = 'EFT';
-    //   } else if (payment_method === "Crypto") {
-    //     userBalance = user?.other_balance?.Crypto || 0;
-    //     balanceType = 'Crypto';
-    //   } else if (payment_method === "Cash") {
-    //     userBalance = user?.cash_balance || 0;
-    //     balanceType = 'Cash';
-    //   }
-
-    //   if (Number(final_balance) > userBalance) {
-    //     return res.status(400).json({
-    //       success: false,
-    //       error: `Insufficient ${balanceType} balance. You only have ${userBalance} available.`,
-    //     });
-    //   }
-    // }
 
     // Now create the buyer
     let obj = { ...req.body }
@@ -316,30 +267,5 @@ router.post('/balance/:id', async (req: Request, res: Response) => {
   }
 });
 
-// // GET /api/buyers/products/:id - Delete a buyer by ID (optional)
-// router.get('/:id', async (req: Request, res: Response) => {
-//     try {
-//       const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
-//       if (!deletedBuyer) {
-//         return res.status(404).json({ message: 'Buyer not found' });
-//       }
-//       res.status(200).json({ message: 'Buyer deleted successfully' });
-//     } catch (error: any) {
-//       res.status(500).json({ error: error.message });
-//     }
-// });
-
-// GET /api/buyers/products/:id - Delete a buyer by ID (optional)
-// router.get('/:activereciept', async (req: Request, res: Response) => {
-//   try {
-//     const deletedBuyer = await Buyer.findByIdAndDelete(req.params.id);
-//     if (!deletedBuyer) {
-//       return res.status(404).json({ message: 'Buyer not found' });
-//     }
-//     res.status(200).json({ message: 'Buyer deleted successfully' });
-//   } catch (error: any) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
 
 export default router;

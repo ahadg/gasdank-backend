@@ -7,10 +7,8 @@ import { sendEmail } from '../utils/sendEmail';
 
 const router = Router();
 
-// Protect all notification endpoints
 router.use(authenticateJWT);
 
-// Initialize Twilio client
 export const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
@@ -26,10 +24,10 @@ export const createNotification = async (obj: any) => {
 // Format phone number for Twilio (ensure it starts with country code)
 export const formatPhoneNumber = (phone: string): string => {
   if (!phone) return '';
-  
+
   // Remove all non-digit characters
   const cleaned = phone.replace(/\D/g, '');
-  
+
   // If it doesn't start with country code, assume US (+1)
   if (cleaned.length === 10) {
     return `+1${cleaned}`;
@@ -38,7 +36,7 @@ export const formatPhoneNumber = (phone: string): string => {
   } else if (!cleaned.startsWith('+')) {
     return `+${cleaned}`;
   }
-  
+
   return cleaned;
 }
 
@@ -106,34 +104,34 @@ router.post('/send', async (req: Request, res: Response) => {
 
     // Validation
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
-      return res.status(400).json({ 
-        error: 'Recipients array is required and must not be empty' 
+      return res.status(400).json({
+        error: 'Recipients array is required and must not be empty'
       });
     }
 
     if (!type || !['outstanding', 'product'].includes(type)) {
-      return res.status(400).json({ 
-        error: 'Type must be either "outstanding" or "product"' 
+      return res.status(400).json({
+        error: 'Type must be either "outstanding" or "product"'
       });
     }
 
     if (type === 'product' && (!products || !Array.isArray(products) || products.length === 0)) { // Updated validation for multiple products
-      return res.status(400).json({ 
-        error: 'Products array is required for product notifications and must not be empty' 
+      return res.status(400).json({
+        error: 'Products array is required for product notifications and must not be empty'
       });
     }
 
     if (!['sms', 'email'].includes(communicationMethod)) {
-      return res.status(400).json({ 
-        error: 'Communication method must be either "sms" or "email"' 
+      return res.status(400).json({
+        error: 'Communication method must be either "sms" or "email"'
       });
     }
 
     // Check configurations based on communication method
     if (communicationMethod === 'sms') {
       if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
-        return res.status(500).json({ 
-          error: 'Twilio configuration is missing. Please check environment variables.' 
+        return res.status(500).json({
+          error: 'Twilio configuration is missing. Please check environment variables.'
         });
       }
     }
@@ -168,10 +166,10 @@ router.post('/send', async (req: Request, res: Response) => {
         const { id, email, name, balance, phone } = recipient;
 
         // Generate message content for multiple products
-        const messageContent = generateMessage(type, message, { 
-          balance, 
+        const messageContent = generateMessage(type, message, {
+          balance,
           products, // Changed from product to products
-          name 
+          name
         });
 
         let communicationResult = null;
@@ -189,7 +187,7 @@ router.post('/send', async (req: Request, res: Response) => {
 
         // Add products info for product notifications
         if (type === 'product' && products) {
-          notificationData.products = products.map((p : any) => ({
+          notificationData.products = products.map((p: any) => ({
             product_id: p._id,
             product_name: p.name,
             product_price: p.price
@@ -206,7 +204,7 @@ router.post('/send', async (req: Request, res: Response) => {
           // Send SMS if phone number is available
           if (phone) {
             const formattedPhone = formatPhoneNumber(phone);
-            
+
             if (formattedPhone) {
               try {
                 communicationResult = await twilioClient.messages.create({
@@ -220,7 +218,7 @@ router.post('/send', async (req: Request, res: Response) => {
                 notificationData.phone_number = formattedPhone;
                 notificationData.status = 'sent';
                 notificationData.sent_at = new Date();
-                
+
               } catch (smsError: any) {
                 if (smsError.code === 21408) {
                   return res.status(400).json({
@@ -247,14 +245,14 @@ router.post('/send', async (req: Request, res: Response) => {
           if (email) {
             try {
               // Generate email subject and HTML content
-              const emailSubject = type === 'outstanding' 
-                ? 'Payment Reminder' 
-                : `New Products Available: ${products.map((p : any) => p.name).join(', ')}`;
-              
-              const emailHtml = generateEmailHtml(type, messageContent, { 
-                balance, 
-                products, 
-                name 
+              const emailSubject = type === 'outstanding'
+                ? 'Payment Reminder'
+                : `New Products Available: ${products.map((p: any) => p.name).join(', ')}`;
+
+              const emailHtml = generateEmailHtml(type, messageContent, {
+                balance,
+                products,
+                name
               });
 
               await sendEmail({
@@ -267,7 +265,7 @@ router.post('/send', async (req: Request, res: Response) => {
               notificationData.email_status = 'sent';
               notificationData.status = 'sent';
               notificationData.sent_at = new Date();
-              
+
             } catch (emailError: any) {
               console.error(`Email Error for ${name} (${email}):`, emailError);
               notificationData.status = 'failed';
@@ -342,9 +340,9 @@ router.post('/send', async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Bulk notification error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to process notifications',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -354,47 +352,47 @@ router.post('/send', async (req: Request, res: Response) => {
 router.post('/send-invoice/:buyer_id', async (req: Request, res: Response) => {
   try {
     const { buyer_id } = req.params;
-    const { 
-      customMessage, 
-      totalAmount, 
-      dueAmount, 
+    const {
+      customMessage,
+      totalAmount,
+      dueAmount,
       transactionCount,
-      dateRange 
+      dateRange
     } = req.body;
     const user_id = (req as any).user?.id || (req as any).user?._id;
 
     // Validation
     if (!buyer_id) {
-      return res.status(400).json({ 
-        error: 'Client ID is required' 
+      return res.status(400).json({
+        error: 'Client ID is required'
       });
     }
 
     // Check if Twilio is configured
     if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
-      return res.status(500).json({ 
-        error: 'Twilio configuration is missing. Please check environment variables.' 
+      return res.status(500).json({
+        error: 'Twilio configuration is missing. Please check environment variables.'
       });
     }
 
     // You'll need to fetch client details from your database
     // Assuming you have a User/Client model - adjust the import and model name accordingly
     // import User from "../models/user"; // Adjust path as needed
-    
+
     // For now, I'll show the structure - you'll need to replace this with your actual client fetching logic
     const client = await Buyer.findById(buyer_id); // Replace 'User' with your actual client model
-    
+
     if (!client) {
-      return res.status(404).json({ 
-        error: 'Client not found' 
+      return res.status(404).json({
+        error: 'Client not found'
       });
     }
 
     const { name, phone, email } = client;
 
     if (!phone) {
-      return res.status(400).json({ 
-        error: 'Client phone number not found' 
+      return res.status(400).json({
+        error: 'Client phone number not found'
       });
     }
 
@@ -405,28 +403,28 @@ router.post('/send-invoice/:buyer_id', async (req: Request, res: Response) => {
       }
 
       const formatCurrency = (amount: number) => `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-      
+
       let message = `Invoice Summary for ${name}:\n`;
-      
+
       if (dateRange) {
         message += `Period: ${dateRange}\n`;
       }
-      
+
       if (transactionCount) {
         message += `Transactions: ${transactionCount}\n`;
       }
-      
+
       if (totalAmount !== undefined) {
         message += `Total Sales: ${formatCurrency(totalAmount)}\n`;
       }
-      
+
       if (dueAmount !== undefined) {
         const status = dueAmount > 0 ? 'Outstanding' : dueAmount < 0 ? 'Credit' : 'Paid';
         message += `Amount ${status}: ${formatCurrency(Math.abs(dueAmount))}\n`;
       }
-      
+
       message += `\nPlease contact us for any questions regarding your account.`;
-      
+
       return message;
     };
 
@@ -434,8 +432,8 @@ router.post('/send-invoice/:buyer_id', async (req: Request, res: Response) => {
     const formattedPhone = formatPhoneNumber(phone);
 
     if (!formattedPhone) {
-      return res.status(400).json({ 
-        error: 'Invalid phone number format' 
+      return res.status(400).json({
+        error: 'Invalid phone number format'
       });
     }
 
@@ -488,8 +486,8 @@ router.post('/send-invoice/:buyer_id', async (req: Request, res: Response) => {
     } catch (smsError: any) {
       console.error(`SMS Error for ${name} (${formattedPhone}):`, smsError);
       console.log(smsError);
-      console.log(typeof(smsError));
-      
+      console.log(typeof (smsError));
+
       notificationData.status = 'failed';
       notificationData.error_message = smsError;
 
@@ -518,9 +516,9 @@ router.post('/send-invoice/:buyer_id', async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Invoice SMS error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to send invoice SMS',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -532,7 +530,7 @@ router.get('/history/:user_id', async (req: Request, res: Response) => {
     const { page = 1, limit = 50, type, status } = req.query;
 
     const query: any = { user_id };
-    
+
     if (type) query.type = type;
     if (status) query.status = status;
 
@@ -597,25 +595,25 @@ router.get('/:user_id', async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
     const { page = 1, limit = 10, unread_only = false } = req.query;
-    
+
     const query: any = { user_id };
     if (unread_only === 'true') {
       query.isRead = false;
     }
-    
+
     const notifications = await Notification.find(query)
       .populate('actorId', 'name email avatar') // Populate actor details
       .populate('activityId') // Populate activity if needed
       .sort({ createdAt: -1 }) // Most recent first
       .limit(parseInt(limit as string))
       .skip((parseInt(page as string) - 1) * parseInt(limit as string));
-    
+
     const totalNotifications = await Notification.countDocuments(query);
-    const unreadCount = await Notification.countDocuments({ 
-      user_id, 
-      isRead: false 
+    const unreadCount = await Notification.countDocuments({
+      user_id,
+      isRead: false
     });
-    
+
     res.status(200).json({
       notifications,
       pagination: {
@@ -634,20 +632,20 @@ router.get('/:user_id', async (req: Request, res: Response) => {
 router.put('/:notification_id/read', async (req: Request, res: Response) => {
   try {
     const { notification_id } = req.params;
-    
+
     const notification = await Notification.findByIdAndUpdate(
       notification_id,
-      { 
+      {
         isRead: true,
         updated_at: new Date()
       },
       { new: true }
     );
-    
+
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
-    
+
     res.status(200).json(notification);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update notification' });
@@ -658,15 +656,15 @@ router.put('/:notification_id/read', async (req: Request, res: Response) => {
 router.put('/:user_id/mark-all-read', async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
-    
+
     const result = await Notification.updateMany(
       { user_id, isRead: false },
-      { 
+      {
         isRead: true,
         updated_at: new Date()
       }
     );
-    
+
     res.status(200).json({
       message: 'All notifications marked as read',
       modifiedCount: result.modifiedCount
@@ -680,13 +678,13 @@ router.put('/:user_id/mark-all-read', async (req: Request, res: Response) => {
 router.delete('/:notification_id', async (req: Request, res: Response) => {
   try {
     const { notification_id } = req.params;
-    
+
     const notification = await Notification.findByIdAndDelete(notification_id);
-    
+
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
-    
+
     res.status(200).json({ message: 'Notification deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete notification' });
@@ -697,9 +695,9 @@ router.delete('/:notification_id', async (req: Request, res: Response) => {
 router.delete('/:user_id/delete-all', async (req: Request, res: Response) => {
   try {
     const { user_id } = req.params;
-    
+
     const result = await Notification.deleteMany({ user_id });
-    
+
     res.status(200).json({
       message: 'All notifications deleted successfully',
       deletedCount: result.deletedCount

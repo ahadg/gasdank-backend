@@ -7,35 +7,26 @@ import User from '../models/User';
 const router = Router();
 router.use(authenticateJWT);
 
-router.get('/:userid',checkAccess("config.categories","read"),async (req: Request, res: Response) => {
-    try {
-      const { userid } = req.params;
-      const user: any = await User.findById(userid);
-      let userid_admin = user?.created_by || null;
-      const query: any = {
-        $or: userid_admin
-          ? [{ user_id: userid }, { user_id: userid_admin }]
-          : [{ user_id: userid }],
-      };
-      const categories = await Category.find(query);
-      res.status(200).json(categories);
-    } catch (error) {
-      res.status(500).json({ error });
-    }
+router.get('/:userid', checkAccess("config.categories", "read"), async (req: Request, res: Response) => {
+  try {
+    const { userid } = req.params;
+    const user: any = await User.findById(userid);
+    let userid_admin = user?.created_by || null;
+    const query: any = {
+      $or: userid_admin
+        ? [{ user_id: userid }, { user_id: userid_admin }]
+        : [{ user_id: userid }],
+    };
+    const categories = await Category.find(query);
+    res.status(200).json(categories);
+  } catch (error) {
+    res.status(500).json({ error });
+  }
 });
 
-// GET /api/categories
-// router.get('/:id', async (req: Request, res: Response) => {
-//   try {
-//     const categories = await Category.findby();
-//     res.status(200).json(categories);
-//   } catch (error) {
-//     res.status(500).json({ error });
-//   }
-// });
 
 // POST /api/categories
-router.post('/',checkAccess("config.categories","create"), async (req: Request, res: Response) => {
+router.post('/', checkAccess("config.categories", "create"), async (req: Request, res: Response) => {
   try {
     const newCategory = new Category(req.body);
     await newCategory.save();
@@ -46,10 +37,10 @@ router.post('/',checkAccess("config.categories","create"), async (req: Request, 
 });
 
 // PUT /api/categories
-router.put('/',checkAccess("config.categories","edit"), async (req: Request, res: Response) => {
+router.put('/', checkAccess("config.categories", "edit"), async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
-    console.log("updated Data",req.body?.formData)
+    console.log("updated Data", req.body?.formData)
     const updatedCategory = await Category.findByIdAndUpdate(id, req.body?.formData, { new: true });
     res.status(200).json(updatedCategory);
   } catch (error) {
@@ -58,7 +49,7 @@ router.put('/',checkAccess("config.categories","edit"), async (req: Request, res
 });
 
 // DELETE /api/categories
-router.delete('/',checkAccess("config.categories","delete"), async (req: Request, res: Response) => {
+router.delete('/', checkAccess("config.categories", "delete"), async (req: Request, res: Response) => {
   try {
     const { id } = req.body;
     await Category.findByIdAndDelete(id);

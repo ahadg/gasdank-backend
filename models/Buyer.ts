@@ -1,13 +1,13 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IBuyer extends Document {
-    user_id: mongoose.Types.ObjectId;
+  user_id: mongoose.Types.ObjectId;
   firstName: string;
   lastName: string;
   email: string;
   phone?: string;
   status?: string;
-//   balance?: number;
+  //   balance?: number;
   currentBalance?: number;
   startingBalance?: number;
   created_at: Date;
@@ -18,17 +18,19 @@ export interface IBuyer extends Document {
 const BuyerSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   firstName: { type: String, required: true },
-  admin_id: { type: Schema.Types.ObjectId, ref: 'User' }, // optional, only if created by an admin
-  created_by_role: { type: String, enum: ['user', 'admin'], default : "admin" }, // helps in filtering
-  lastName: { type: String, 
-  //  required: true 
+  admin_id: { type: Schema.Types.ObjectId, ref: 'User' },
+  created_by_role: { type: String, enum: ['user', 'admin'], default: "admin" },
+  lastName: {
+    type: String,
+    //  required: true 
   },
-  email: { type: String, 
-   // required: true 
+  email: {
+    type: String,
+    // required: true 
   },
   phone: { type: String },
-  status: {type : Boolean, default : true},
-//   balance: { type: Number, default: 0 },
+  status: { type: Boolean, default: true },
+  //   balance: { type: Number, default: 0 },
   currentBalance: { type: Number, default: 0 },
   startingBalance: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now },

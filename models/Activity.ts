@@ -4,10 +4,10 @@ export interface IActivity extends Document {
   user_id: mongoose.Types.ObjectId;
   user_created_by: mongoose.Types.ObjectId;
   page: string;
-  type : string;
-  amount : number;
-  payment_method : string;
-  payment_direction : string;
+  type: string;
+  amount: number;
+  payment_method: string;
+  payment_direction: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -15,30 +15,30 @@ export interface IActivity extends Document {
 const ActivitySchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   user_created_by: { type: Schema.Types.ObjectId, ref: 'User' },
-  transaction_id:  { type: Schema.Types.ObjectId, ref: 'Transaction' },
-  worker_id : { type: Schema.Types.ObjectId, ref: 'User' },
-  buyer_id:  { type: Schema.Types.ObjectId, ref: 'Buyer' },
+  transaction_id: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+  worker_id: { type: Schema.Types.ObjectId, ref: 'User' },
+  buyer_id: { type: Schema.Types.ObjectId, ref: 'Buyer' },
 
-  action: { type: String, required: true }, // e.g., 'CREATE', 'UPDATE', 'DELETE', 'LOGIN'
-  resource_type: { type: String }, // e.g., 'Post', 'Comment', 'Invoice'
-  resource_id: { type: Schema.Types.ObjectId }, // optional: points to specific resource if applicable
+  action: { type: String, required: true },
+  resource_type: { type: String },
+  resource_id: { type: Schema.Types.ObjectId },
 
-  page: { type: String }, // frontend route or page name
-  type: { type: String }, // custom classification if needed
+  page: { type: String },
+  type: { type: String },
 
-  description: { type: String }, // brief summary of the activity
-  ip_address: { type: String }, // client IP address
-  user_agent: { type: String }, // browser/device info
+  description: { type: String },
+  ip_address: { type: String },
+  user_agent: { type: String },
 
-  location: { type: String }, // optional: geo-location (city/country)
+  location: { type: String },
 
-  amount: { type: String }, // used for financial activity
-  payment_method: { type: String }, // e.g., 'credit_card', 'paypal'
-  payment_direction : {type : String},
+  amount: { type: String },
+  payment_method: { type: String },
+  payment_direction: { type: String },
 
-  status: { type: String, default: 'success' }, // success, failed, pending, etc.
+  status: { type: String, default: 'success' },
 
-  metadata: { type: Object }, // flexible field for extra context (e.g., before/after changes)
+  metadata: { type: Object },
 
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },

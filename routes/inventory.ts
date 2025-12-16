@@ -17,7 +17,7 @@ router.get('/next-reference-number', checkAccess("inventory", "read"), async (re
     //***** InventorySchema.pre('save' check in inventory Model
     const lastRef = lastProduct?.reference_number;
     const nextReferenceNumber = (typeof lastRef === 'number' && !isNaN(lastRef)) ? lastRef + 1 : 1;
-    
+
     res.status(200).json({ nextReferenceNumber });
   } catch (error: any) {
     console.error('Error getting next reference number:', error);
@@ -26,10 +26,10 @@ router.get('/next-reference-number', checkAccess("inventory", "read"), async (re
 });
 
 // GET /api/inventory/outOfStock
-router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res: Response) => {
+router.get('/outOfStock', checkAccess("reports", "read"), async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const outOfStock = await Inventory.find({ qty: 0,user_id : userId }).populate("category");
+    const outOfStock = await Inventory.find({ qty: 0, user_id: userId }).populate("category");
     res.status(200).json(outOfStock);
   } catch (error) {
     res.status(500).json({ error });
@@ -37,10 +37,10 @@ router.get('/outOfStock',checkAccess("reports","read"), async (req: Request, res
 });
 
 // GET /api/inventory/lowInventory
-router.get('/lowInventory', checkAccess("reports","read"),async (req: Request, res: Response) => {
+router.get('/lowInventory', checkAccess("reports", "read"), async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 },user_id : userId }).populate("category");
+    const lowInventory = await Inventory.find({ qty: { $gt: -1, $lt: 5 }, user_id: userId }).populate("category");
     res.status(200).json(lowInventory);
   } catch (error) {
     res.status(500).json({ error });
@@ -66,10 +66,10 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
     const query: any = {
       $or: userid_admin
         ? [{ user_id: userid }, { user_id: userid_admin }]
-        : [{ user_id: userid }, {user_created_by_id : userid}],
+        : [{ user_id: userid }, { user_created_by_id: userid }],
     };
 
-    console.log("query",query)
+    console.log("query", query)
 
     if (category) {
       query.category = category;
@@ -96,8 +96,6 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
     res.status(500).json({ error: error.message });
   }
 });
-
-
 
 // GET /api/inventory/:userid/:buyerid
 router.get(
@@ -154,65 +152,55 @@ router.get(
 
 
 // GET /api/inventory/product/:id - Update a buyer by ID
-router.get('/product/:id',checkAccess("inventory","read"), async (req: Request, res: Response) => {
-    try {
+router.get('/product/:id', checkAccess("inventory", "read"), async (req: Request, res: Response) => {
+  try {
 
-      console.log("id",req.params)
-      const { id } = req.params;
-      const updatedProduct = await Inventory.findById(id).populate("category").populate("buyer_id");
-      if (!updatedProduct) {
-        return res.status(404).json({ message: 'Product not found' });
-      }
-      res.status(200).json(updatedProduct);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    console.log("id", req.params)
+    const { id } = req.params;
+    const updatedProduct = await Inventory.findById(id).populate("category").populate("buyer_id");
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Product not found' });
     }
+    res.status(200).json(updatedProduct);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // PUT /api/inventory/:id - Update a Product by ID
-router.put('/:id', checkAccess("inventory","edit"),async (req: Request, res: Response) => {
-    try {
-      const updatedProduct = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
-      if (!updatedProduct) {
-        return res.status(404).json({ message: 'Buyer not found' });
-      }
-      res.status(200).json(updatedProduct);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+router.put('/:id', checkAccess("inventory", "edit"), async (req: Request, res: Response) => {
+  try {
+    const updatedProduct = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Buyer not found' });
     }
+    res.status(200).json(updatedProduct);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/inventory
-router.post('/',checkAccess("inventory","create"), async (req: Request, res: Response) => {
+router.post('/', checkAccess("inventory", "create"), async (req: Request, res: Response) => {
   try {
     const the_user = await User.findById(req.user?.id)
-    const newProduct = new Inventory({...req.body,user_created_by_id: the_user?.created_by});
+    const newProduct = new Inventory({ ...req.body, user_created_by_id: the_user?.created_by });
     await newProduct.save();
     createActivity({
-      user_id : req.user?.id, 
+      user_id: req.user?.id,
       user_created_by: the_user?.created_by,
       action: 'create',
       resource_type: 'inventory',
       page: 'inventory',
       type: 'inventory_created',
-      description : `create new inventory ${req.body.name}`,
+      description: `create new inventory ${req.body.name}`,
     });
     res.status(201).json(newProduct);
   } catch (error) {
-    console.log("error",error)
+    console.log("error", error)
     res.status(500).json({ error });
   }
 });
 
-// DELETE /api/inventory (soft delete)
-// router.delete('/',checkAccess("inventory","delete"), async (req: Request, res: Response) => {
-//   try {
-//     const { id } = req.body;
-//     await Inventory.findByIdAndUpdate(id, { deleted_at: new Date() });
-//     res.status(200).json({ message: 'Product deleted' });
-//   } catch (error) {
-//     res.status(500).json({ error });
-//   }
-// });
 
 export default router;
