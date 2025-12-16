@@ -86,10 +86,21 @@ router.post('/', authenticateJWT, checkAccess("config.users", "create"), async (
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    // Check if a user with the given email already exists
-    const existingUser = await User.findOne({ email: value.email });
+    // Check if email OR username already exists
+    const existingUser = await User.findOne({
+      $or: [
+        { email: value.email },
+        { username: value.username }
+      ]
+    });
+
     if (existingUser) {
-      return res.status(409).json({ error: 'Email already exists' });
+      if (existingUser.email === value.email) {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+      if (existingUser.username === value.username) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
     }
 
     // Hash the password before saving the user
