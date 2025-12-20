@@ -85,12 +85,12 @@ InventorySchema.pre('save', async function (next) {
         this.product_id = generateProductId();
       }
       console.log("this.reference_number", this.reference_number)
-      // if (!this.reference_number) {
-      //   //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
-      //   const reference_number = await getNextReferenceNumber()
-      //   this.reference_number = reference_number
+      if (!this.reference_number) {
+        //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
+        const reference_number = await getNextReferenceNumber()
+        this.reference_number = reference_number
 
-      // }
+      }
       if (!this.name) {
         this.name = `#${this.reference_number || ""}`
 
