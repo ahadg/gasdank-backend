@@ -34,19 +34,23 @@ export const generateProductId = () => {
 // Function to get next reference number
 const getNextReferenceNumber = async (): Promise<number> => {
   try {
-    const lastProduct = await mongoose.models.Inventory.findOne({})
-      .sort({ reference_number: -1 })
-      .select('reference_number');
+    const lastProduct = await mongoose.models.Inventory
+      .findOne({})
+      .sort({ created_at: -1 }) // 🔥 latest created
+      .select('reference_number created_at');
 
     const lastRef = lastProduct?.reference_number;
+    console.log("lastRef", lastRef)
 
-    return (typeof lastRef === 'number' && !isNaN(lastRef)) ? lastRef + 1 : 1;
+    return typeof lastRef === 'number' ? lastRef + 1 : Number(lastRef) + 1;
   } catch (error) {
     console.error('Error getting next reference number:', error);
+
     const count = await mongoose.models.Inventory.countDocuments({});
     return count + 1;
   }
 };
+
 
 
 const InventorySchema: Schema = new Schema({
@@ -88,6 +92,7 @@ InventorySchema.pre('save', async function (next) {
       if (!this.reference_number) {
         //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
         const reference_number = await getNextReferenceNumber()
+        console.log("reference_numberrr", reference_number)
         this.reference_number = reference_number
 
       }

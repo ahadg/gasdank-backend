@@ -158,11 +158,18 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+  };
+}
 
-router.post('/:id/accept', async (req, res) => {
+router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
   try {
     const sample = await Sample.findById(req.params.id);
-    const user = await User.findById(sample?.user_id);
+    console.log("req.user", req.user)
+    const user = await User.findById(req.user?.id);
+    //await User.findById(sample?.user_id);
     let transaction = await Transaction.find({ sample_id: req.params.id });
     if (!sample) {
       return res.status(404).json({ error: 'Sample not found' });
@@ -175,22 +182,22 @@ router.post('/:id/accept', async (req, res) => {
     // ============================================================================
     // CREATE TRANSACTION FOR INVENTORY ADDITION
     // ============================================================================
-    // const transaction = new Transaction({
-    //   user_id: (user?.role == "admin" || user?.role == "superadmin") ? sample.user_id : sample.created_by ,
-    //   buyer_id: sample.buyer_id,
-    //   worker_id: user?.role == "user"  ? sample.user_id : null, // fallback to user_id if no worker_id
-    //   type: "inventory_addition",
-    //   notes: `Inventory addition from accepted sample`,
-    //   payment_method: "Credit", // or whatever default you prefer
-    //   price: 0, // will be calculated from products
-    //   payment_direction: "given", // since we're adding to buyer's debt
-    //   total_shipping: 0,
-    //   profit: 0,
-    //   sample_id : sample?._id,
-    //   items: [] // start with empty items array
-    // });
+    const n_transaction = new Transaction({
+      user_id: (user?.role == "admin" || user?.role == "superadmin") ? sample.user_id : req.user?.id,
+      buyer_id: sample.buyer_id,
+      worker_id: user?.role == "user" ? sample.user_id : null, // fallback to user_id if no worker_id
+      type: "inventory_addition",
+      notes: `Inventory addition from accepted sample`,
+      payment_method: "Credit", // or whatever default you prefer
+      price: 0, // will be calculated from products
+      payment_direction: "given", // since we're adding to buyer's debt
+      total_shipping: 0,
+      profit: 0,
+      sample_id: sample?._id,
+      items: [] // start with empty items array
+    });
 
-    //await transaction.save();
+    await n_transaction.save();
     console.log("step _ 1")
     // ============================================================================
     // PROCESS SAMPLE PRODUCTS AND CREATE INVENTORY
@@ -258,12 +265,16 @@ router.post('/:id/accept', async (req, res) => {
     // ============================================================================
     // UPDATE TRANSACTION WITH CALCULATED VALUES
     // ============================================================================
-    // const roundBalance = (totalPriceWithShipping).toFixed(2);
+    const roundBalance = (totalPriceWithShipping).toFixed(2);
 
-    // transaction.price = totalPrice;
-    // transaction.total_shipping = Number(sample?.totalShippingCost).toFixed(2);
-    // transaction.items = transactionItemIds;
-    await Transaction.findOneAndUpdate({ sample_id: req.params.id }, { items: transactionItemIds });
+    n_transaction.price = totalPrice;
+    n_transaction.total_shipping = Number(sample?.totalShippingCost).toFixed(2);
+    n_transaction.items = transactionItemIds;
+    await n_transaction.save();
+    await Transaction.findOneAndUpdate({
+      sample_id: req.params.id,
+      //  worker_id: req.user?.id 
+    }, { items: transactionItemIds });
 
     // // ============================================================================
     // // UPDATE BUYER BALANCE
@@ -275,7 +286,8 @@ router.post('/:id/accept', async (req, res) => {
     // ============================================================================
     // CREATE LOGS
     // ============================================================================
-    createlogs(user, {
+    const the_user = await User.findById(req.user?.id);
+    createlogs(the_user, {
       buyer_id: sample.buyer_id,
       type: "sample_inventory_addition",
       transaction_id: transaction[0]._id,
