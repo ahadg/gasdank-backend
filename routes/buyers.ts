@@ -167,30 +167,39 @@ router.get(
       let buyers;
 
       if (user_id) {
-        const user: any = await User.findById(user_id);
+        const user: any = await User.findById(user_id).lean();
         if (!user) {
           return res.status(404).json({ error: "User not found" });
         }
 
-        let userIds: mongoose.Types.ObjectId[] = [new mongoose.Types.ObjectId(String(user_id))];
+        let userIds: mongoose.Types.ObjectId[] = [
+          new mongoose.Types.ObjectId(user._id),
+        ];
 
-        if (user.role === "admin" || user.role === "superadmin") {
-          // find all users created by this admin
-          const createdUsers = await User.find(
-            { created_by: new mongoose.Types.ObjectId(user._id) },
-          )
-          const createdUserIds = createdUsers.map((u) => u._id);
-          userIds = [user._id, ...createdUserIds];
-        } else if (user.created_by) {
-          // normal user: include self + their admin
-          userIds = [user._id, user.created_by];
+        // if the user is requesting is admin then include all users created by this admin
+        if (["admin", "superadmin"].includes(user.role)) {
+          const createdUsers: any = await User.find(
+            { created_by: user._id },
+            { _id: 1 }
+          ).lean();
+
+          userIds.push(...createdUsers.map((u: any) => u._id));
         }
 
-        console.log("userIds", userIds)
+        // if the user is normal user then include admin, so that we can admin buyers/clients as well
+        if (user.created_by) {
+          userIds.push(user.created_by);
+        }
 
-        buyers = await Buyer.find({ user_id: { $in: userIds } });
+        buyers = await Buyer.find({
+          $or: [
+            { user_id: { $in: userIds } },
+            { admin_id: { $in: userIds } }
+          ],
+          deleted_at: null
+        });
       } else {
-        buyers = await Buyer.find();
+        buyers = await Buyer.find({ deleted_at: null });
       }
 
       res.status(200).json(buyers);
@@ -199,6 +208,7 @@ router.get(
     }
   }
 );
+
 
 
 // GET /api/buyers/:buyerid - Get buyers by id
