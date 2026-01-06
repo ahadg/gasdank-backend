@@ -116,17 +116,14 @@ router.get(
 
       // Build query
       const query: any = {
-        // if user has an admin, allow either; otherwise just the user
-        ...(userid_admin
-          ? { $or: [{ user_id: userid }, { user_id: userid_admin }] }
-          : { user_id: userid }),
+        $or: userid_admin
+          ? [{ user_id: userid }, { user_id: userid_admin }]
+          : [{ user_id: userid }, { user_created_by_id: userid }],
         qty: { $gt: 0 },
       };
 
       if (category) {
-        // If category is an ObjectId string in your schema, cast it:
-        // query.category = new Types.ObjectId(category as string);
-        query.category = category; // keep as-is if it's a string enum/ref name
+        query.category = category;
       }
 
       const [totalProducts, products] = await Promise.all([
@@ -183,6 +180,16 @@ router.put('/:id', checkAccess("inventory", "edit"), async (req: Request, res: R
 // POST /api/inventory
 router.post('/', checkAccess("inventory", "create"), async (req: Request, res: Response) => {
   try {
+    const { reference_number } = req.body;
+
+    // Check if inventory with same reference_number already exists
+    if (reference_number) {
+      const existingInventory = await Inventory.findOne({ reference_number });
+      if (existingInventory) {
+        return res.status(400).json({ error: 'Inventory with this reference number already exists' });
+      }
+    }
+
     const the_user = await User.findById(req.user?.id)
     const newProduct = new Inventory({ ...req.body, user_created_by_id: the_user?.created_by });
     await newProduct.save();
@@ -196,9 +203,9 @@ router.post('/', checkAccess("inventory", "create"), async (req: Request, res: R
       description: `create new inventory ${req.body.name}`,
     });
     res.status(201).json(newProduct);
-  } catch (error) {
+  } catch (error: any) {
     console.log("error", error)
-    res.status(500).json({ error });
+    res.status(500).json({ error: error.message || error });
   }
 });
 
