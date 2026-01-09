@@ -9,6 +9,8 @@ import { sendEmail } from '../utils/sendEmail'
 import Buyer from '../models/Buyer'
 import { sendSMS } from '../utils/sendSMS'
 
+import Inventory from '../models/Inventory'
+
 const router = Router()
 router.use(authenticateJWT)
 
@@ -86,7 +88,6 @@ router.get("/worker", async (req: Request, res: Response) => {
   }
 });
 
-
 // POST create a new viewing session
 router.post('/', async (req: Request, res: Response) => {
   try {
@@ -96,6 +97,19 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (!buyer_id || !user_id || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Check inventory quantities
+    for (const item of items) {
+      const inventoryItem = await Inventory.findById(item.productId);
+      if (!inventoryItem) {
+        return res.status(404).json({ error: `Product with ID ${item.productId} not found` });
+      }
+      if (item.qty > inventoryItem.qty) {
+        return res.status(400).json({
+          error: `Insufficient quantity for item ${item.name || inventoryItem.name}. Requested: ${item.qty}, Available: ${inventoryItem.qty}`
+        });
+      }
     }
 
     const newSession = new SampleViewingClient({

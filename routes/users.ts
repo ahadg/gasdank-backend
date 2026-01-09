@@ -316,19 +316,34 @@ router.get(
         return res.status(400).json({ error: "User not found" });
       }
 
-      // Build list of user_ids to query
-      let userIds: mongoose.Types.ObjectId[] = [userObjectId];
-
+      // Build list of user_ids to query (include self, admin, and fellow workers)
+      let rootAdminId: mongoose.Types.ObjectId;
       if (the_user.role === "admin" || the_user.role === "superadmin") {
-        // find all users created by this admin
-        const createdUsers = await User.find(
-          { created_by: userObjectId },
-          { _id: 1 }
-        ).lean();
-
-        const createdUserIds = createdUsers.map((u) => u._id);
-        userIds = [userObjectId, ...createdUserIds as mongoose.Types.ObjectId[]]; // include self + created users
+        rootAdminId = userObjectId;
+      } else {
+        rootAdminId = the_user.created_by || userObjectId;
       }
+
+      // find all users in this group (the admin and all users they created)
+      const groupUsers = await User.find(
+        { $or: [{ _id: rootAdminId }, { created_by: rootAdminId }] },
+        { _id: 1, cash_balance: 1, other_balance: 1 }
+      ).lean();
+
+      const userIds = groupUsers.map((u) => u._id as mongoose.Types.ObjectId);
+
+      // Aggregate balances across the group
+      let groupCashBalance = 0;
+      let groupOtherBalance: any = {};
+
+      groupUsers.forEach((u: any) => {
+        groupCashBalance += Number(u.cash_balance || 0);
+        if (u.other_balance && typeof u.other_balance === 'object') {
+          Object.entries(u.other_balance).forEach(([key, value]) => {
+            groupOtherBalance[key] = (groupOtherBalance[key] || 0) + Number(value || 0);
+          });
+        }
+      });
 
       // Build a date filter if provided
       let dateFilter: any = {};
@@ -447,22 +462,20 @@ router.get(
       ]);
       const rawCompanyPayableBalance = companyPayableAgg[0]?.outstanding || 0;
 
-      // Get the logged-in user financials (main user_id)
-      const user = await User.findById(userObjectId);
 
       // Final Balance Calculation
       const rawCompanyBalance =
         rawInventoryValue +
         clientPayableBalances
         +
-        Number(user?.cash_balance || 0) +
+        Number(groupCashBalance || 0) +
         // Number(user?.other_balance?.EFT || 0) +
         // Number(user?.other_balance?.Crypto || 0)
         -
         Math.abs(Number(rawCompanyPayableBalance));
       console.log({
-        rawInventoryValue, clientPayableBalances, cash_balance: user?.cash_balance,
-        EFT: user?.other_balance?.EFT, Crypto: user?.other_balance?.Crypto,
+        rawInventoryValue, clientPayableBalances, groupCashBalance,
+        groupOtherBalance,
         rawCompanyPayableBalance,
         finalCompanybalance: rawCompanyBalance
       })
@@ -479,8 +492,9 @@ router.get(
         clientPayableBalances: formatNumber(clientPayableBalances),
         companyPayableBalance: formatNumber(rawCompanyPayableBalance),
         companyBalance: formatNumber(rawCompanyBalance),
-        other_balance: user?.other_balance || {},
-        user,
+        other_balance: groupOtherBalance,
+        user: the_user,
+        groupCashBalance
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
