@@ -34,6 +34,9 @@ router.get('/', authenticateJWT, checkAccess("config.users", "read"), async (req
   try {
     const the_user = await User.findById(req.user?.id)
     let users;
+    if (!the_user) {
+      return res.status(404).json({ error: "User not found" });
+    }
     if (the_user.role === "superadmin") {
       users = await User.find();
     } else {
@@ -98,7 +101,7 @@ router.post('/', authenticateJWT, checkAccess("config.users", "create"), async (
       if (existingUser.email === value.email) {
         return res.status(409).json({ error: "Email already exists" });
       }
-      if (existingUser.username === value.username) {
+      if (existingUser.userName === value.userName) {
         return res.status(409).json({ error: "Username already exists" });
       }
     }
@@ -507,7 +510,7 @@ router.delete(
   "/clean-data/:user_id",
   authenticateJWT,
   //checkAccess("config.users", "delete"),
-  async (req: Request, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const { user_id } = req.params;
 
@@ -523,9 +526,24 @@ router.delete(
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Check if requester is admin/superadmin to determine if we should also clean data of users created by this user
+      const requesterRole = req.user?.role;
+      const isAdminRequest = requesterRole === 'admin' || requesterRole === 'superadmin';
+
+      let childUserIds: mongoose.Types.ObjectId[] = [];
+      if (isAdminRequest) {
+        const childUsers = await User.find({ created_by: userObjectId }, { _id: 1 });
+        childUserIds = childUsers.map((u: any) => u._id);
+      }
+
+      // Collect all IDs to clean up
+      const allTargetUserIds = [userObjectId, ...childUserIds];
+
       // Start deletion process
       const deletionResults: any = {
         user_id,
+        isAdminRequest,
+        childUsersCount: childUserIds.length,
         deleted: {},
         errors: []
       };
@@ -534,8 +552,8 @@ router.delete(
         // Delete Activities
         const activityResult = await Activity.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { user_created_by: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { user_created_by: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.activities = activityResult.deletedCount;
@@ -547,8 +565,8 @@ router.delete(
         // Delete Buyers
         const buyerResult = await Buyer.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { admin_id: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { admin_id: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.buyers = buyerResult.deletedCount;
@@ -560,8 +578,8 @@ router.delete(
         // Delete Expenses
         const expenseResult = await Expense.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { user_created_by_id: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { user_created_by_id: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.expenses = expenseResult.deletedCount;
@@ -571,7 +589,12 @@ router.delete(
 
       try {
         // Delete Inventory
-        const inventoryResult = await Inventory.deleteMany({ user_id: userObjectId });
+        const inventoryResult = await Inventory.deleteMany({
+          $or: [
+            { user_id: { $in: allTargetUserIds } },
+            { user_created_by_id: { $in: allTargetUserIds } }
+          ]
+        });
         deletionResults.deleted.inventory = inventoryResult.deletedCount;
       } catch (error: any) {
         deletionResults.errors.push({ model: 'Inventory', error: error.message });
@@ -581,8 +604,8 @@ router.delete(
         // Delete Notifications
         const notificationResult = await Notification.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { actorId: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { actorId: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.notifications = notificationResult.deletedCount;
@@ -592,7 +615,9 @@ router.delete(
 
       try {
         // Delete Samples
-        const sampleResult = await Sample.deleteMany({ user_id: userObjectId });
+        const sampleResult = await Sample.deleteMany({
+          user_id: { $in: allTargetUserIds }
+        });
         deletionResults.deleted.samples = sampleResult.deletedCount;
       } catch (error: any) {
         deletionResults.errors.push({ model: 'Sample', error: error.message });
@@ -600,7 +625,12 @@ router.delete(
 
       try {
         // Delete SampleViewingClients
-        const sampleViewingResult = await SampleViewingClients.deleteMany({ user_id: userObjectId });
+        const sampleViewingResult = await SampleViewingClients.deleteMany({
+          $or: [
+            { user_id: { $in: allTargetUserIds } },
+            { user_created_by: { $in: allTargetUserIds } }
+          ]
+        });
         deletionResults.deleted.sampleViewingClients = sampleViewingResult.deletedCount;
       } catch (error: any) {
         deletionResults.errors.push({ model: 'SampleViewingClients', error: error.message });
@@ -610,8 +640,8 @@ router.delete(
         // Delete TransactionItems
         const transactionItemResult = await TransactionItem.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { admin_id: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { admin_id: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.transactionItems = transactionItemResult.deletedCount;
@@ -623,8 +653,8 @@ router.delete(
         // Delete TransactionPayments
         const transactionPaymentResult = await TransactionPayment.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { admin_id: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { admin_id: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.transactionPayments = transactionPaymentResult.deletedCount;
@@ -636,8 +666,8 @@ router.delete(
         // Delete Transactions
         const transactionResult = await Transaction.deleteMany({
           $or: [
-            { user_id: userObjectId },
-            { admin_id: userObjectId }
+            { user_id: { $in: allTargetUserIds } },
+            { admin_id: { $in: allTargetUserIds } }
           ]
         });
         deletionResults.deleted.transactions = transactionResult.deletedCount;
@@ -646,7 +676,7 @@ router.delete(
       }
 
       try {
-        // Reset User balances
+        // Reset Primary User balances
         const userUpdateResult = await User.findByIdAndUpdate(
           userObjectId,
           {
@@ -662,6 +692,12 @@ router.delete(
           cash_balance: userUpdateResult?.cash_balance,
           other_balance: userUpdateResult?.other_balance
         };
+
+        // If admin request, also delete the child users themselves
+        if (isAdminRequest && childUserIds.length > 0) {
+          const userDeleteResult = await User.deleteMany({ _id: { $in: childUserIds } });
+          deletionResults.deleted.childUsers = userDeleteResult.deletedCount;
+        }
       } catch (error: any) {
         deletionResults.errors.push({ model: 'User', error: error.message });
         deletionResults.userBalancesReset = false;
@@ -675,7 +711,7 @@ router.delete(
         resource_type: 'user_data',
         page: 'user',
         type: 'user_data_cleanup',
-        description: `All data cleaned for user ${user.email}`,
+        description: `All data cleaned for user ${user.email}${isAdminRequest ? ` and ${childUserIds.length} secondary users` : ''}`,
       });
 
       res.status(200).json({

@@ -100,7 +100,7 @@ router.post('/', async (req: Request, res: Response) => {
     //   return res.status(400).json({ error: 'Missing required field: currentBalance or startingBalance' });
     // }
 
-    const user = await User.findById(user_id)
+    const user: any = await User.findById(user_id)
 
     // Validate balance BEFORE creating buyer
     let c_balance = req.body.currentBalance || req.body.startingBalance || req.body?.balance

@@ -60,7 +60,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
       return res.status(401).json({ error: 'User not authenticated' })
     }
 
-    const user = await User.findById(req.body.user_id)
+    const user: any = await User.findById(req.body.user_id)
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
     }
@@ -73,8 +73,8 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
       user.stripeCustomerId = customer.id
       const currentTrialEnd = new Date(); // Original trial end date
       currentTrialEnd.setDate(currentTrialEnd.getDate() + 60); // Add 60 days
-      
-      user.trialEnd = currentTrialEnd.toISOString();     
+
+      user.trialEnd = currentTrialEnd.toISOString();
       user.subscriptionStatus = 'trialing';
       user.currentPeriodEnd = currentTrialEnd.toISOString();
       user.currentPeriodStart = new Date().toISOString();
@@ -87,7 +87,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
     if (!priceId) {
       return res.status(400).json({ error: 'Missing price ID' })
     }
-    console.log({isUpgrade,stripeSubscriptionId : user.stripeSubscriptionId})
+    console.log({ isUpgrade, stripeSubscriptionId: user.stripeSubscriptionId })
     if (isUpgrade && user.stripeSubscriptionId) {
       // 🎯 User already has a subscription -> UPDATE it
       const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId)
@@ -105,7 +105,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
       user.plan = plan
       await user.save();
       return res.json({ status: "success" })
-    } 
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -118,7 +118,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
         },
       ],
       subscription_data: {
-       // trial_period_days: 60,
+        // trial_period_days: 60,
         metadata: {
           plan_name: plan,
         },
@@ -129,7 +129,7 @@ export const createCheckoutSessionHandler = async (req: AuthenticatedRequest, re
       success_url: `${process.env.FRONTEND_URL}/auth/login?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/cancel`,
     })
-    
+
     return res.json({ url: session.url })
 
   } catch (error: any) {

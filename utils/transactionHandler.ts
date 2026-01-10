@@ -127,24 +127,24 @@ const createTransaction = async (payload: TransactionPayload, transactionType: s
  * Update user balance based on payment method and direction
  */
 const updateUserBalance = async (userId: string, paymentMethod: string, amount: number, direction: 'received' | 'given') => {
-  const user = await User.findById(userId);
-  if (!user) return;
+  const balanceOwner = await User.getBalanceOwner(userId);
+  if (!balanceOwner) return;
 
   const adjustedAmount = direction === 'received' ? amount : -amount;
 
   if (paymentMethod === 'Cash') {
-    await User.findByIdAndUpdate(userId, {
+    await User.findByIdAndUpdate(balanceOwner._id, {
       $inc: { cash_balance: adjustedAmount }
     });
   } else {
     // Initialize the nested key if it doesn't exist
-    if (!user.other_balance?.hasOwnProperty(paymentMethod)) {
-      await User.findByIdAndUpdate(userId, {
+    if (!balanceOwner.other_balance?.hasOwnProperty(paymentMethod)) {
+      await User.findByIdAndUpdate(balanceOwner._id, {
         $set: { [`other_balance.${paymentMethod}`]: 0 }
       });
     }
 
-    await User.findByIdAndUpdate(userId, {
+    await User.findByIdAndUpdate(balanceOwner._id, {
       $inc: { [`other_balance.${paymentMethod}`]: adjustedAmount }
     });
   }
@@ -159,26 +159,27 @@ const processPaymentTransaction = async (transaction: any, payload: TransactionP
 
   // Check balance for outgoing payments
   if (payment_direction === "given") {
-    console.log("user?.cash_balance", user?.cash_balance);
+    const balanceOwner = await User.getBalanceOwner(user._id);
+    console.log("balanceOwner?.cash_balance", balanceOwner?.cash_balance);
 
     let userBalance = 0;
     let balanceType = '';
 
     if (payment_method === "EFT") {
-      userBalance = user?.other_balance?.EFT || 0;
+      userBalance = balanceOwner?.other_balance?.EFT || 0;
       balanceType = 'EFT';
     } else if (payment_method === "Crypto") {
-      userBalance = user?.other_balance?.Crypto || 0;
+      userBalance = balanceOwner?.other_balance?.Crypto || 0;
       balanceType = 'Crypto';
     } else if (payment_method === "Cash") {
-      userBalance = user?.cash_balance || 0;
+      userBalance = balanceOwner?.cash_balance || 0;
       balanceType = 'Cash';
     }
 
     // if (Number(payment) > userBalance) {
     //   return {
     //     success: false,
-    //     error: `Insufficient ${balanceType} balance. You only have ${userBalance} available.`,
+    //     error: `Insufficient ${balanceType} balance. One only has ${userBalance} available.`,
     //   };
     // }
   }

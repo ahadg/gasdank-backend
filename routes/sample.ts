@@ -94,7 +94,7 @@ router.post('/', async (req: Request, res: Response) => {
     });
 
     await newSample.save();
-    const user = await User.findById(user_id);
+    const user: any = await User.findById(user_id);
     const transaction = new Transaction({
       user_id: (user?.role == "admin" || user?.role == "superadmin") ? user_id : user.created_by,
       buyer_id: buyer_id,
