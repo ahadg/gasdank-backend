@@ -11,13 +11,16 @@ router.get('/:userid', checkAccess("config.categories", "read"), async (req: Req
   try {
     const { userid } = req.params;
     const user: any = await User.findById(userid);
-    let userid_admin = user?.created_by || null;
-    const query: any = {
-      $or: userid_admin
-        ? [{ user_id: userid }, { user_id: userid_admin }]
-        : [{ user_id: userid }],
-    };
-    const categories = await Category.find(query);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const adminId = (user.role === 'admin' || user.role === 'superadmin') ? user._id : (user.created_by || user._id);
+
+    const usersUnderAdmin = await User.find({ created_by: adminId, deleted_at: null });
+    const userIds = [adminId, ...usersUnderAdmin.map(u => u._id)];
+
+    const categories = await Category.find({ user_id: { $in: userIds } });
     res.status(200).json(categories);
   } catch (error) {
     res.status(500).json({ error });

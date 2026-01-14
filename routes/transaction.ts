@@ -529,31 +529,64 @@ router.get('/recent/:buyer_id/:inventory_id', checkAccess("sale", "read"), async
     console.log("req.params:", req.params);
     const { buyer_id, inventory_id } = req.params;
 
-    // Build a query condition based on provided parameters.
-    const query: any = {};
-    if (buyer_id) {
-      query.buyer_id = buyer_id;
-    }
-    if (inventory_id) {
-      query.inventory_id = inventory_id;
-      query.type = "sale"
-    }
-
-    const buyer = await Buyer.findById(buyer_id)
-
-    // Fetch the most recent transaction item matching the query.
-    const recentTransactionItem = await TransactionItem.findOne(query)
-      .sort({ created_at: -1 }) // Sort descending by creation time
+    // Get all sale transactions for this buyer and product
+    const saleTransactions = await TransactionItem.find({
+      buyer_id: buyer_id,
+      inventory_id: inventory_id,
+      type: "sale"
+    })
+      .sort({ created_at: -1 }) // Most recent first
       .populate({
         path: 'inventory_id',
         model: 'Inventory'
       })
       .populate({
         path: 'transaction_id',
-        model: 'Transaction'
+        model: 'Transaction',
+        select: 'created_at'
       });
 
-    res.status(200).json({ recentTransactionItem, buyer });
+    // Get all return transactions for this buyer and product
+    const returnTransactions = await TransactionItem.find({
+      buyer_id: buyer_id,
+      inventory_id: inventory_id,
+      type: "return"
+    });
+
+    // Calculate totals
+    const totalSoldQty = saleTransactions.reduce((total, sale) => {
+      return total + (sale.qty * sale.measurement);
+    }, 0);
+
+    const totalReturnedQty = returnTransactions.reduce((total, returnItem) => {
+      return total + (returnItem.qty * returnItem.measurement);
+    }, 0);
+
+    const availableToReturn = totalSoldQty - totalReturnedQty;
+
+    const buyer = await Buyer.findById(buyer_id);
+
+    // Format response data
+    const formattedTransactions = saleTransactions.map(transaction => ({
+      _id: transaction._id,
+      qty: transaction.qty,
+      measurement: transaction.measurement,
+      unit: transaction.unit,
+      shipping: transaction.shipping || 0,
+      price: transaction.price,
+      sale_price: transaction.sale_price,
+      created_at: transaction.transaction_id?.created_at || transaction.created_at
+    }));
+
+    res.status(200).json({
+      saleTransactions: formattedTransactions,
+      buyer,
+      totals: {
+        totalSold: totalSoldQty,
+        totalReturned: totalReturnedQty,
+        availableToReturn: availableToReturn
+      }
+    });
   } catch (error: any) {
     console.log("error", error);
     res.status(500).json({ error: error.message });
