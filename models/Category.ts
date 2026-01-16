@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface ICategory extends Document {
   user_id: mongoose.Types.ObjectId;
   name: string;
+  type: 'general' | 'expenses';
   active?: boolean;
   created_at: Date;
   updated_at: Date;
@@ -10,6 +11,12 @@ export interface ICategory extends Document {
 
 const CategorySchema: Schema = new Schema({
   name: { type: String, required: true },
+  type: {
+    type: String,
+    enum: ['general', 'expenses'],
+    default: 'general',
+    required: true
+  },
   active: { type: Boolean, default: true },
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   created_at: { type: Date, default: Date.now },
