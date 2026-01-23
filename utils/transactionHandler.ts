@@ -250,7 +250,12 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
 
   // Process each item
   for (const item of items) {
-    description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)}) ${item.shipping ? '+ (🚚 ' + formatCurrency(item.shipping * item.qty) + ')' : ''}\n`;
+    const qty = Number(item.qty) || 0;
+    const itemUnitPrice = Number(item.sale_price || item.price) || 0;
+    const shipping = Number(item.shipping) || 0;
+    const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
+
+    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)}) ${shipping ? '+ (🚚 ' + formatCurrency(shipping * qty) + ')' : ''}\n`;
     let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
@@ -321,7 +326,12 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
 
   // Process each item
   for (const item of items) {
-    description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)}) ${item.shipping ? '+ (🚚 ' + formatCurrency(item.shipping * item.qty) + ')' : ''}\n`;
+    const qty = Number(item.qty) || 0;
+    const itemUnitPrice = Number(item.sale_price || item.price) || 0;
+    const shipping = Number(item.shipping) || 0;
+    const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
+
+    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)}) ${shipping ? '+ (🚚 ' + formatCurrency(shipping * qty) + ')' : ''}\n`;
     console.log("buyer_id***", buyer_id)
     let obj = {
       transaction_id: transaction._id,
@@ -394,19 +404,27 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
 
   // Process each item
   for (const item of items) {
-    description += `${item.qty} ${item.unit} of ${item.name} (@ ${formatCurrency(item.sale_price || item.price)})\n`;
+    const qty = Number(item.qty) || 0;
+    const measurement = Number(item.measurement) || 1;
+    const itemUnitPrice = Number(transactionType === 'sale' ? (item.sale_price || item.price) : (item.price || 0)) || 0;
+    const shipping = Number(item.shipping) || 0;
+
+    // Determine display unit and quantity
+    const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
+    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)})\n`;
+
     let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
       user_id: payload.user_id,
       buyer_id,
-      qty: item.qty,
-      measurement: item.measurement,
-      shipping: item.shipping,
+      qty: qty,
+      measurement: measurement,
+      shipping: shipping,
       type: transactionType,
       unit: item.unit,
-      price: item.price,
-      sale_price: item.sale_price,
+      price: Number(item.price) || 0,
+      sale_price: Number(item.sale_price) || 0,
       created_by_role: "admin",
       admin_id: undefined
     }
@@ -421,17 +439,23 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
 
     // Calculate inventory change
     const qtyChange = transactionType === 'return'
-      ? (item.qty * item.measurement)
-      : -(item.qty * item.measurement);
+      ? (qty * measurement)
+      : -(qty * measurement);
 
     // Update buyer's balance
     if (transactionType === 'sale') {
-      const saleAmount = Number((item.sale_price * item.measurement * item.qty).toFixed(2));
+      // For per piece, we don't multiply by measurement (which is usually weight)
+      const multiplier = item.unit === 'per piece' ? 1 : measurement;
+      const saleAmount = Number((itemUnitPrice * multiplier * qty).toFixed(2));
+
       await Buyer.findByIdAndUpdate(buyer_id, {
         $inc: { currentBalance: saleAmount }
       });
     } else if (transactionType === 'return') {
-      const returnAmount = -((item.price * item.measurement * item.qty) + (item.qty * (item.shipping || 0)));
+      // For return, we use price (cost) and also add back shipping if applicable
+      const multiplier = item.unit === 'per piece' ? 1 : measurement;
+      const returnAmount = -((itemUnitPrice * multiplier * qty) + (qty * shipping));
+
       await Buyer.findByIdAndUpdate(buyer_id, {
         $inc: { currentBalance: Number(returnAmount.toFixed(2)) }
       });

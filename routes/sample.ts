@@ -116,21 +116,20 @@ router.post('/', async (req: Request, res: Response) => {
     let description = '';
 
     for (const product of products) {
-      const shipping_per_unit = product.shippingCost
-      // console.log({
-      //   shippingCost: product.shippingCost,
-      //   shippingPerUnit: product?.shippingPerUnit
-      // })
-      console.log("shipping_per_unit", shipping_per_unit)
-      const productTotalPrice = product.price * product.qty;
-      let productTotalShipping = Number(product.shippingCost).toFixed(2);
+      const qty = Number(product.qty) || 0;
+      const price = Number(product.price) || 0;
+      const shipping_per_unit = Number(product.shippingCost) || 0;
+
+      const productTotalPrice = price * qty;
+      const productTotalShipping = Number(shipping_per_unit * qty).toFixed(2);
+      const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
 
       // Build description string
-      description += `${product.qty} ${product.unit} of ${product.name} (@ ${formatCurrency(product.price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
+      description += `${qty} ${displayUnit} of ${product.name} (@ ${formatCurrency(price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
 
       // Add to totals
       totalPrice += productTotalPrice;
-      totalPriceWithShipping += (Number(product.price) + product.shippingCost) * product.qty;
+      totalPriceWithShipping += (price + shipping_per_unit) * qty;
       totalShipping += Number(productTotalShipping);
     }
 
@@ -209,26 +208,25 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
     let description = '';
 
     for (const product of sample.products) {
-      const shipping_per_unit = product.shippingCost
-      // console.log({
-      //   shippingCost: product.shippingCost,
-      //   shippingPerUnit: product?.shippingPerUnit
-      // })
-      console.log("shipping_per_unit", shipping_per_unit)
-      const productTotalPrice = product.price * product.qty;
-      let productTotalShipping = Number(product.shippingCost).toFixed(2);
+      const qty = Number(product.qty) || 0;
+      const price = Number(product.price) || 0;
+      const shipping_per_unit = Number(product.shippingCost) || 0;
+
+      const productTotalPrice = price * qty;
+      const productTotalShipping = Number(shipping_per_unit * qty).toFixed(2);
+      const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
 
       // Create inventory item
       const inventoryItem = await Inventory.create({
         name: product.name,
-        qty: product.qty,
+        qty: qty,
         unit: product.unit,
         user_id: sample.user_id,
         user_created_by_id: user?.created_by,
         buyer_id: sample.buyer_id,
         category: product.category_id,
-        price: product.price,
-        shippingCost: Number(shipping_per_unit).toFixed(2),
+        price: price,
+        shippingCost: shipping_per_unit.toFixed(2),
         product_id: generateProductId()
       });
 
@@ -238,13 +236,13 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
         inventory_id: inventoryItem._id,
         user_id: sample.user_id,
         buyer_id: sample.buyer_id,
-        qty: product.qty,
+        qty: qty,
         measurement: 1, // assuming 1:1 measurement for samples
         shipping: shipping_per_unit,
         type: "sample_addition",
         unit: product.unit,
-        price: product.price,
-        sale_price: product.price, // assuming sale_price equals price for samples
+        price: price,
+        sale_price: price, // assuming sale_price equals price for samples
       });
 
       await transactionItem.save();
@@ -253,11 +251,11 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
       transactionItemIds.push({ transactionitem_id: transactionItem._id });
 
       // Build description string
-      description += `${product.qty} ${product.unit} of ${product.name} (@ ${formatCurrency(product.price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
+      description += `${qty} ${displayUnit} of ${product.name} (@ ${formatCurrency(price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
 
       // Add to totals
       totalPrice += productTotalPrice;
-      totalPriceWithShipping += (product.price + product.shippingCost) * product.qty;
+      totalPriceWithShipping += (price + shipping_per_unit) * qty;
       totalShipping += Number(productTotalShipping);
     }
     // create notification
@@ -329,7 +327,8 @@ router.post('/:id/return', async (req, res) => {
 
   // Create detailed product list for SMS
   const productList = sample.products.map((product: any) => {
-    return `${product.name} (${product.qty} ${product.unit})`
+    const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
+    return `${product.name} (${product.qty} ${displayUnit})`
   }).join(', ')
   // {
   //   _id: new ObjectId("685fd223a92f28d9d4481d4b"),

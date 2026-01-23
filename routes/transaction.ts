@@ -169,12 +169,13 @@ router.post('/', checkAccess("sale", "create"), async (req: Request, res: Respon
 const calculateItemTotal = (item: any, transactionType: string = 'sale', addShipping: boolean = true) => {
   // For sale transactions, use sale_price; for others, use price
   const unitPrice = transactionType === 'sale' ? (item.sale_price || item.price || 0) : (item.price || 0);
-  const baseAmount = (item.qty || 0) * (item.measurement || 1) * unitPrice;
+  const multiplier = item.unit === 'per piece' ? 1 : (item.measurement || 1);
+  const baseAmount = (item.qty || 0) * multiplier * unitPrice;
   const shippingAmount = (item.qty || 0) * (item.shipping || 0);
   if (addShipping == true) {
-    return baseAmount + shippingAmount;
+    return Number((baseAmount + shippingAmount).toFixed(2));
   } else {
-    return baseAmount;
+    return Number(baseAmount.toFixed(2));
   }
 };
 
@@ -339,9 +340,10 @@ router.put('/:id',
         let description = `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} transaction updated:\n`;
         for (const item of items || []) {
           const displayPrice = transactionType === 'sale' ? (item.sale_price || item.price || 0) : (item.price || 0);
-          description += `${item.qty} ${item.unit} of ${item.name} (@ $${displayPrice.toFixed(2)})`;
+          const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
+          description += `${item.qty} ${displayUnit} of ${item.name} (@ $${displayPrice.toFixed(2)})`;
           if (item.shipping) {
-            description += ` + shipping $${(item.shipping * item.qty).toFixed(2)}`;
+            description += ` + shipping $${(Number(item.shipping) * Number(item.qty)).toFixed(2)}`;
           }
           description += `\n`;
         }

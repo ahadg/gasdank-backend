@@ -93,7 +93,7 @@ router.post('/', authenticateJWT, checkAccess("config.users", "create"), async (
     const existingUser = await User.findOne({
       $or: [
         { email: value.email },
-        { username: value.username }
+        { userName: value.userName }
       ]
     });
 
@@ -729,6 +729,36 @@ router.delete(
 
 
 
+
+
+// POST /api/users/check-exists - Check if email or username already exists
+router.post('/check-exists', async (req: Request, res: Response) => {
+  try {
+    const { email, userName } = req.body;
+
+    if (!email && !userName) {
+      return res.status(400).json({ error: "At least email or userName is required" });
+    }
+
+    const query: any = { $or: [] };
+    if (email) query.$or.push({ email });
+    if (userName) query.$or.push({ userName });
+
+    const existingUser = await User.findOne(query);
+
+    if (existingUser) {
+      return res.status(200).json({
+        exists: true,
+        emailExists: email ? existingUser.email === email : false,
+        userNameExists: userName ? existingUser.userName === userName : false
+      });
+    }
+
+    res.status(200).json({ exists: false });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 export default router;

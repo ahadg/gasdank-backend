@@ -184,7 +184,9 @@ router.post('/', checkAccess("inventory", "create"), async (req: Request, res: R
 
     // Check if inventory with same reference_number already exists
     if (reference_number) {
-      const existingInventory = await Inventory.findOne({ reference_number });
+      console.log("reference_number", reference_number)
+      console.log("user_id", req.user?.id)
+      const existingInventory = await Inventory.findOne({ reference_number, user_id: req.user?.id });
       if (existingInventory) {
         return res.status(400).json({ error: 'Inventory with this reference number already exists' });
       }

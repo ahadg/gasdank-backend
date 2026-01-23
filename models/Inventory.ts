@@ -61,7 +61,7 @@ const InventorySchema: Schema = new Schema({
   },
   reference_number: {
     type: String,
-    unique: true,
+    //unique: true,
     //required: true
   },
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
