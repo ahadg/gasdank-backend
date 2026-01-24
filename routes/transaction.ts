@@ -10,7 +10,7 @@ import User from '../models/User';
 import moment from 'moment';
 import { createActivity } from './activity';
 import { createNotification } from './notifications';
-import { processTransaction } from '../utils/transactionHandler';
+import { processTransaction, round, roundCurrency } from '../utils/transactionHandler';
 
 
 const router = Router();
@@ -230,13 +230,13 @@ router.put('/:id',
         for (const originalItem of original_items || []) {
           if (transactionType === 'sale') {
             // Original sale decreased inventory, so we add it back
-            const qtyChange = (originalItem.qty || 0) * (originalItem.measurement || 1);
+            const qtyChange = round((originalItem.qty || 0) * (originalItem.measurement || 1));
             await Inventory.findByIdAndUpdate(originalItem.inventory_id, {
               $inc: { qty: qtyChange }
             });
           } else if (transactionType === 'return') {
             // Original return increased inventory, so we subtract it back
-            const qtyChange = (originalItem.qty || 0) * (originalItem.measurement || 1);
+            const qtyChange = round((originalItem.qty || 0) * (originalItem.measurement || 1));
             await Inventory.findByIdAndUpdate(originalItem.inventory_id, {
               $inc: { qty: -qtyChange }
             });
@@ -248,7 +248,7 @@ router.put('/:id',
         for (const newItem of items || []) {
           if (transactionType === 'sale') {
             // New sale should decrease inventory
-            const qtyChange = (newItem.qty || 0) * (newItem.measurement || 1);
+            const qtyChange = round((newItem.qty || 0) * (newItem.measurement || 1));
 
             // Check if enough inventory is available
             const inventoryItem = await Inventory.findById(newItem.inventory_id);
@@ -263,7 +263,7 @@ router.put('/:id',
             });
           } else if (transactionType === 'return') {
             // New return should increase inventory
-            const qtyChange = (newItem.qty || 0) * (newItem.measurement || 1);
+            const qtyChange = round((newItem.qty || 0) * (newItem.measurement || 1));
             await Inventory.findByIdAndUpdate(newItem.inventory_id, {
               $inc: { qty: qtyChange }
             });
@@ -272,21 +272,21 @@ router.put('/:id',
         }
 
         // Update buyer balance based on the difference
+        const roundedDiff = roundCurrency(Number(totalDifference));
         if (transactionType === 'sale') {
           // For sales, buyer owes more if total increased (positive difference)
           await Buyer.findByIdAndUpdate(buyer_id, {
-            $inc: { currentBalance: totalDifference }
+            $inc: { currentBalance: roundedDiff }
           });
         } else if (transactionType === 'return') {
           // For returns, buyer gets credit back if total increased (negative impact on balance)
           await Buyer.findByIdAndUpdate(buyer_id, {
-            $inc: { currentBalance: -totalDifference }
+            $inc: { currentBalance: -roundedDiff }
           });
         } else if (transactionType === 'inventory_addition') {
           // For inventory addition, buyer owes less if total decreased (negative difference)
-          console.log({ totalDifference });
           await Buyer.findByIdAndUpdate(buyer_id, {
-            $inc: { currentBalance: -totalDifference }
+            $inc: { currentBalance: -roundedDiff }
           });
         }
 
@@ -316,16 +316,16 @@ router.put('/:id',
 
                 // Find the corresponding original item to calculate quantity difference
                 const originalItem = original_items?.find((origItem: any) => origItem.inventory_id === item.inventory_id);
-                const originalQty = originalItem ? (originalItem.qty || 0) * (originalItem.measurement || 1) : 0;
-                const newQty = (item.qty || 0) * (item.measurement || 1);
-                const qtyDifference = newQty - originalQty;
+                const originalQty = originalItem ? round((originalItem.qty || 0) * (originalItem.measurement || 1)) : 0;
+                const newQty = round((item.qty || 0) * (item.measurement || 1));
+                const qtyDifference = round(newQty - originalQty);
 
                 console.log(`Inventory ${item.inventory_id}: Original qty: ${originalQty}, New qty: ${newQty}, Difference: ${qtyDifference}`);
 
                 // Update inventory with the quantity difference and other fields
                 await Inventory.findByIdAndUpdate(item?.inventory_id, {
-                  price: item.price, // Keep the cost price in inventory
-                  shippingCost: item.shipping,
+                  price: roundCurrency(item.price), // Keep the cost price in inventory
+                  shippingCost: roundCurrency(item.shipping),
                   unit: item.unit,
                   $inc: { qty: qtyDifference } // Add/subtract the difference instead of setting absolute value
                 });
@@ -351,11 +351,13 @@ router.put('/:id',
         if (transactionType === 'sale') {
           // Calculate total profit for sale transactions
           const totalProfit = items.reduce((acc: number, item: any) => {
-            const profit = (item.qty || 0) * (item.measurement || 1) * ((item.sale_price || 0) - (item.price * item?.shipping));
-            return acc + profit;
+            const cost = roundCurrency((item.price || 0) * (item.measurement || 1) * (item.qty || 0));
+            const sale = roundCurrency((item.sale_price || 0) * (item.measurement || 1) * (item.qty || 0));
+            const shippingCost = roundCurrency((item.qty || 0) * (item.shipping || 0));
+            return acc + (sale - cost - shippingCost);
           }, 0);
-          existingTransaction.
-            description += `Total Profit: $${totalProfit.toFixed(2)}`;
+          existingTransaction.profit = roundCurrency(totalProfit);
+          description += `Total Profit: $${existingTransaction.profit.toFixed(2)}`;
         }
 
         createlogs(the_user, {
@@ -397,14 +399,18 @@ router.put('/:id',
         // For sale transactions, also calculate and store the total sale price
         if (transactionType === 'sale') {
           const totalSalePrice = items.reduce((acc: number, item: any) => {
-            return acc + (item.qty || 0) * (item.measurement || 1) * (item.sale_price || 0);
+            return acc + roundCurrency((item.qty || 0) * (item.measurement || 1) * (item.sale_price || 0));
           }, 0);
-          const totalOrgPrice = original_items.reduce((acc: number, item: any) => {
-            return acc + (item.qty || 0) * (item.measurement || 1) * (item.price || 0);
+          const totalOrgPrice = items.reduce((acc: number, item: any) => {
+            return acc + roundCurrency((item.qty || 0) * (item.measurement || 1) * (item.price || 0));
           }, 0);
-          existingTransaction.sale_price = totalSalePrice
-          existingTransaction.price = totalOrgPrice;
-          existingTransaction.profit = totalSalePrice - totalOrgPrice
+          const totalShippingCost = items.reduce((acc: number, item: any) => {
+            return acc + roundCurrency((item.qty || 0) * (item.shipping || 0));
+          }, 0);
+
+          existingTransaction.sale_price = roundCurrency(totalSalePrice);
+          existingTransaction.price = roundCurrency(totalOrgPrice);
+          existingTransaction.profit = roundCurrency(totalSalePrice - totalOrgPrice - totalShippingCost);
           //+ (total_shipping || 0);
         }
       }

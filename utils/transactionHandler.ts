@@ -9,6 +9,14 @@ import User from '../models/User';
 import { createNotification } from '../routes/notifications';
 import { createlogs, formatCurrency } from '../routes/transaction';
 
+// Helper for rounding to avoid floating point precision issues
+export const round = (value: number, decimals: number = 8): number => {
+  return Number(Math.round(Number(value + 'e' + decimals)) + 'e-' + decimals);
+};
+
+// Helper for rounding currency
+export const roundCurrency = (value: number): number => round(value, 2);
+
 
 export interface TransactionItemData {
   inventory_id: string;
@@ -81,7 +89,7 @@ const validateInventory = async (items: TransactionItemData[]): Promise<{ isVali
       };
     }
 
-    const requiredQty = item.qty * item.measurement;
+    const requiredQty = round(item.qty * item.measurement);
 
     if (inventoryItem.qty < requiredQty) {
       return {
@@ -107,9 +115,9 @@ const createTransaction = async (payload: TransactionPayload, transactionType: s
     payment_method: payload.payment_method,
     price: payload.price || payload.payment,
     payment_direction: payload.payment_direction,
-    sale_price: payload.sale_price,
-    total_shipping: payload.total_shipping?.toFixed(2),
-    profit: payload.profit?.toFixed(2),
+    total_shipping: payload.total_shipping ? roundCurrency(payload.total_shipping) : 0,
+    profit: payload.profit ? roundCurrency(payload.profit) : 0,
+    sale_price: payload.sale_price ? roundCurrency(payload.sale_price) : 0,
     items: [],
     created_by_role: "admin",
     admin_id: undefined
@@ -250,24 +258,24 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
 
   // Process each item
   for (const item of items) {
-    const qty = Number(item.qty) || 0;
-    const itemUnitPrice = Number(item.sale_price || item.price) || 0;
-    const shipping = Number(item.shipping) || 0;
+    const qty = round(Number(item.qty) || 0);
+    const itemUnitPrice = roundCurrency(Number(item.sale_price || item.price) || 0);
+    const shipping = roundCurrency(Number(item.shipping) || 0);
     const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
 
-    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)}) ${shipping ? '+ (🚚 ' + formatCurrency(shipping * qty) + ')' : ''}\n`;
+    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)}) ${shipping ? '+ (🚚 ' + formatCurrency(roundCurrency(shipping * qty)) + ')' : ''}\n`;
     let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
       user_id: payload.user_id,
       buyer_id,
-      qty: item.qty,
-      measurement: item.measurement,
-      shipping: item.shipping,
+      qty: qty,
+      measurement: round(item.measurement || 1),
+      shipping: shipping,
       type: transactionType,
       unit: item.unit,
-      price: item.price,
-      sale_price: item.sale_price,
+      price: roundCurrency(item.price),
+      sale_price: roundCurrency(item.sale_price),
       created_by_role: 'admin',
       admin_id: undefined
     }
@@ -284,19 +292,20 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
     // Update inventory for restock
     if (transactionType === 'restock') {
       await Inventory.findByIdAndUpdate(item.inventory_id, {
-        $inc: { qty: item.qty },
-        shippingCost: item?.shipping,
-        price: item?.price
+        $inc: { qty: qty },
+        shippingCost: shipping,
+        price: roundCurrency(item.price)
       });
     }
   }
 
   // Calculate total shipping
   const totalShippingVal = items.reduce((total, item) => {
-    return total + (Number(item.shipping) * Number(item.qty) || 0);
+    return total + (roundCurrency(Number(item.shipping)) * round(Number(item.qty)) || 0);
   }, 0);
 
-  const roundBalance = Number(price) + Number(totalShippingVal);
+  const roundedTotalShipping = roundCurrency(totalShippingVal);
+  const roundBalance = roundCurrency(Number(price) + roundedTotalShipping);
 
   // Update buyer's balance
   await Buyer.findByIdAndUpdate(buyer_id, {
@@ -326,25 +335,25 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
 
   // Process each item
   for (const item of items) {
-    const qty = Number(item.qty) || 0;
-    const itemUnitPrice = Number(item.sale_price || item.price) || 0;
-    const shipping = Number(item.shipping) || 0;
+    const qty = round(Number(item.qty) || 0);
+    const itemUnitPrice = roundCurrency(Number(item.sale_price || item.price) || 0);
+    const shipping = roundCurrency(Number(item.shipping) || 0);
     const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
 
-    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)}) ${shipping ? '+ (🚚 ' + formatCurrency(shipping * qty) + ')' : ''}\n`;
+    description += `${qty} ${displayUnit} of ${item.name} (@ ${formatCurrency(itemUnitPrice)}) ${shipping ? '+ (🚚 ' + formatCurrency(roundCurrency(shipping * qty)) + ')' : ''}\n`;
     console.log("buyer_id***", buyer_id)
     let obj = {
       transaction_id: transaction._id,
       inventory_id: item.inventory_id,
       user_id: payload.user_id,
       //buyer_id,
-      qty: item.qty,
-      measurement: item.measurement,
-      shipping: item.shipping,
+      qty: qty,
+      measurement: round(item.measurement || 1),
+      shipping: shipping,
       type: transactionType,
       unit: item.unit,
-      price: item.price,
-      sale_price: item.sale_price,
+      price: roundCurrency(item.price),
+      sale_price: roundCurrency(item.sale_price),
       created_by_role: 'admin',
       admin_id: undefined
     }
@@ -360,19 +369,20 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
     // Update inventory for restock
     if (transactionType === 'restock') {
       await Inventory.findByIdAndUpdate(item.inventory_id, {
-        $inc: { qty: item.qty },
-        shippingCost: item?.shipping,
-        price: item?.price
+        $inc: { qty: qty },
+        shippingCost: shipping,
+        price: roundCurrency(item.price)
       });
     }
   }
 
   // Calculate total shipping
   const totalShippingVal = items.reduce((total, item) => {
-    return total + (Number(item.shipping) * Number(item.qty) || 0);
+    return total + (roundCurrency(Number(item.shipping)) * round(Number(item.qty)) || 0);
   }, 0);
 
-  const roundBalance = Number(price) + Number(totalShippingVal);
+  const roundedTotalShipping = roundCurrency(totalShippingVal);
+  const roundBalance = roundCurrency(Number(price) + roundedTotalShipping);
 
   // // Update buyer's balance
   // await Buyer.findByIdAndUpdate(buyer_id, { 
@@ -404,10 +414,10 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
 
   // Process each item
   for (const item of items) {
-    const qty = Number(item.qty) || 0;
-    const measurement = Number(item.measurement) || 1;
-    const itemUnitPrice = Number(transactionType === 'sale' ? (item.sale_price || item.price) : (item.price || 0)) || 0;
-    const shipping = Number(item.shipping) || 0;
+    const qty = round(Number(item.qty) || 0);
+    const measurement = round(Number(item.measurement) || 1);
+    const itemUnitPrice = roundCurrency(Number(transactionType === 'sale' ? (item.sale_price || item.price) : (item.price || 0)) || 0);
+    const shipping = roundCurrency(Number(item.shipping) || 0);
 
     // Determine display unit and quantity
     const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
@@ -438,15 +448,15 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
     transactionItemIds.push({ transactionitem_id: transactionItem._id });
 
     // Calculate inventory change
-    const qtyChange = transactionType === 'return'
+    const qtyChange = round(transactionType === 'return'
       ? (qty * measurement)
-      : -(qty * measurement);
+      : -(qty * measurement));
 
     // Update buyer's balance
     if (transactionType === 'sale') {
       // For per piece, we don't multiply by measurement (which is usually weight)
       const multiplier = item.unit === 'per piece' ? 1 : measurement;
-      const saleAmount = Number((itemUnitPrice * multiplier * qty).toFixed(2));
+      const saleAmount = roundCurrency(itemUnitPrice * multiplier * qty);
 
       await Buyer.findByIdAndUpdate(buyer_id, {
         $inc: { currentBalance: saleAmount }
@@ -454,10 +464,10 @@ const processSaleReturnTransaction = async (transaction: any, payload: Transacti
     } else if (transactionType === 'return') {
       // For return, we use price (cost) and also add back shipping if applicable
       const multiplier = item.unit === 'per piece' ? 1 : measurement;
-      const returnAmount = -((itemUnitPrice * multiplier * qty) + (qty * shipping));
+      const returnAmount = -roundCurrency((itemUnitPrice * multiplier * qty) + (qty * shipping));
 
       await Buyer.findByIdAndUpdate(buyer_id, {
-        $inc: { currentBalance: Number(returnAmount.toFixed(2)) }
+        $inc: { currentBalance: returnAmount }
       });
     }
 
