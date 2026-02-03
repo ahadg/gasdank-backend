@@ -29,6 +29,7 @@ export interface IUser extends Document {
   paymentMethodType?: string;
   resetPasswordToken?: string;
   resetPasswordExpires?: string;
+  showProductPrice: boolean;
 }
 
 interface IUserModel extends mongoose.Model<IUser> {
@@ -68,6 +69,7 @@ const UserSchema: Schema = new Schema({
   paymentMethodType: { type: String },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
+  showProductPrice: { type: Boolean, default: true },
 });
 
 UserSchema.statics.getBalanceOwner = async function (userId: string | mongoose.Types.ObjectId) {
