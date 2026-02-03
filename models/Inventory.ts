@@ -13,9 +13,9 @@ export interface IInventory extends Document {
   name: string;
   price: number;
   shippingCost?: number;
-  strain_type: string;
   active?: boolean;
   notes?: string;
+  product_type?: mongoose.Types.ObjectId;
   created_at: Date;
   updated_at: Date;
 }
@@ -74,9 +74,9 @@ const InventorySchema: Schema = new Schema({
   name: { type: String },
   price: { type: Number, required: true },
   shippingCost: { type: Number, default: 0 },
-  strain_type: { type: String },
   active: { type: Boolean, default: true },
   notes: { type: String },
+  product_type: { type: Schema.Types.ObjectId, ref: 'ProductType' },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
 });

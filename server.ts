@@ -35,6 +35,7 @@ import inventoryRoutes from './routes/inventory';
 import transactionRoutes from './routes/transaction';
 import dashboardRoutes from './routes/dashboard';
 import webhookProxyRoutes from './routes/webhookProxy'; // Add this import
+import productTypesRoutes from './routes/productTypes';
 
 
 const app = express();
@@ -80,6 +81,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/transaction', transactionRoutes);
 app.use("/api/dashboard", dashboardRoutes)
 app.use('/api/webhook-proxy', webhookProxyRoutes); // Add the new proxy route
+app.use('/api/product-types', productTypesRoutes);
 
 
 const PORT = process.env.PORT || 4000;

@@ -84,7 +84,8 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
     const products = await Inventory.find(query)
       .skip(skip)
       .limit(limitNum)
-      .populate("category");
+      .populate("category")
+      .populate("product_type");
 
     res.status(200).json({
       page: pageNum,
@@ -132,6 +133,7 @@ router.get(
           .skip(skip)
           .limit(limitNum)
           .populate('category')
+          .populate("product_type")
           .lean(),
       ]);
 
@@ -154,7 +156,7 @@ router.get('/product/:id', checkAccess("inventory", "read"), async (req: Request
 
     console.log("id", req.params)
     const { id } = req.params;
-    const updatedProduct = await Inventory.findById(id).populate("category").populate("buyer_id");
+    const updatedProduct = await Inventory.findById(id).populate("category").populate("buyer_id").populate("product_type");
     if (!updatedProduct) {
       return res.status(404).json({ message: 'Product not found' });
     }
