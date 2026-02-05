@@ -35,8 +35,8 @@ export const createlogs = (user: any, obj: any) => {
     buyer_id: obj?.buyer_id
   })
 }
-export const formatCurrency = (value: number) =>
-  `$${value?.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+export const formatCurrency = (value: any) =>
+  `$${Number(value)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 
 
@@ -339,7 +339,7 @@ router.put('/:id',
         // Create log entry for the update
         let description = `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} transaction updated:\n`;
         for (const item of items || []) {
-          const displayPrice = transactionType === 'sale' ? (item.sale_price || item.price || 0) : (item.price || 0);
+          const displayPrice = Number(transactionType === 'sale' ? (item.sale_price || item.price || 0) : (item.price || 0));
           const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
           description += `${item.qty} ${displayUnit} of ${item.name} (@ $${displayPrice.toFixed(2)})`;
           if (item.shipping) {
@@ -351,13 +351,13 @@ router.put('/:id',
         if (transactionType === 'sale') {
           // Calculate total profit for sale transactions
           const totalProfit = items.reduce((acc: number, item: any) => {
-            const cost = roundCurrency((item.price || 0) * (item.measurement || 1) * (item.qty || 0));
-            const sale = roundCurrency((item.sale_price || 0) * (item.measurement || 1) * (item.qty || 0));
-            const shippingCost = roundCurrency((item.qty || 0) * (item.shipping || 0));
+            const cost = roundCurrency((Number(item.price) || 0) * (Number(item.measurement) || 1) * (Number(item.qty) || 0));
+            const sale = roundCurrency((Number(item.sale_price) || 0) * (Number(item.measurement) || 1) * (Number(item.qty) || 0));
+            const shippingCost = roundCurrency((Number(item.qty) || 0) * (Number(item.shipping) || 0));
             return acc + (sale - cost - shippingCost);
           }, 0);
           existingTransaction.profit = roundCurrency(totalProfit);
-          description += `Total Profit: $${existingTransaction.profit.toFixed(2)}`;
+          description += `Total Profit: $${Number(existingTransaction.profit).toFixed(2)}`;
         }
 
         createlogs(the_user, {
