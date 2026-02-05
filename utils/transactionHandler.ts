@@ -10,12 +10,14 @@ import { createNotification } from '../routes/notifications';
 import { createlogs, formatCurrency } from '../routes/transaction';
 
 // Helper for rounding to avoid floating point precision issues
-export const round = (value: number, decimals: number = 8): number => {
-  return Number(Math.round(Number(value + 'e' + decimals)) + 'e-' + decimals);
+export const round = (value: any, decimals: number = 8): number => {
+  const num = Number(value);
+  if (isNaN(num)) return 0;
+  return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
 };
 
 // Helper for rounding currency
-export const roundCurrency = (value: number): number => round(value, 2);
+export const roundCurrency = (value: any): number => round(value, 2);
 
 
 export interface TransactionItemData {
@@ -274,8 +276,8 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
       shipping: shipping,
       type: transactionType,
       unit: item.unit,
-      price: roundCurrency(item.price),
-      sale_price: roundCurrency(item.sale_price),
+      price: roundCurrency(Number(item.price) || 0),
+      sale_price: roundCurrency(Number(item.sale_price) || 0),
       created_by_role: 'admin',
       admin_id: undefined
     }
@@ -294,7 +296,7 @@ const processInventoryTransaction = async (transaction: any, payload: Transactio
       await Inventory.findByIdAndUpdate(item.inventory_id, {
         $inc: { qty: qty },
         shippingCost: shipping,
-        price: roundCurrency(item.price)
+        price: roundCurrency(Number(item.price) || 0)
       });
     }
   }
@@ -352,8 +354,8 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
       shipping: shipping,
       type: transactionType,
       unit: item.unit,
-      price: roundCurrency(item.price),
-      sale_price: roundCurrency(item.sale_price),
+      price: roundCurrency(Number(item.price) || 0),
+      sale_price: roundCurrency(Number(item.sale_price) || 0),
       created_by_role: 'admin',
       admin_id: undefined
     }
@@ -371,7 +373,7 @@ const processInventoryTransactionWithoutBuyer = async (transaction: any, payload
       await Inventory.findByIdAndUpdate(item.inventory_id, {
         $inc: { qty: qty },
         shippingCost: shipping,
-        price: roundCurrency(item.price)
+        price: roundCurrency(Number(item.price) || 0)
       });
     }
   }
