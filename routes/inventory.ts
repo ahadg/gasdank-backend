@@ -16,7 +16,14 @@ router.get('/next-reference-number', checkAccess("inventory", "read"), async (re
       .select('reference_number');
     //***** InventorySchema.pre('save' check in inventory Model
     const lastRef = lastProduct?.reference_number;
-    const nextReferenceNumber = (typeof lastRef === 'number' && !isNaN(lastRef)) ? lastRef + 1 : 1;
+    let nextReferenceNumber = 1;
+
+    if (lastRef) {
+      const parsedRef = parseInt(lastRef, 10);
+      if (!isNaN(parsedRef)) {
+        nextReferenceNumber = parsedRef + 1;
+      }
+    }
 
     res.status(200).json({ nextReferenceNumber });
   } catch (error: any) {
@@ -51,7 +58,7 @@ router.get('/lowInventory', checkAccess("reports", "read"), async (req: Request,
 router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, res: Response) => {
   try {
     const { userid } = req.params;
-    const { category, page, limit, qty } = req.query;
+    const { category, page, limit, qty, product_type } = req.query;
 
     // find user
     const user: any = await User.findById(userid);
@@ -73,6 +80,10 @@ router.get('/:userid', checkAccess("inventory", "read"), async (req: Request, re
 
     if (category) {
       query.category = category;
+    }
+
+    if (product_type) {
+      query.product_type = product_type;
     }
 
     if (qty === 'gt0') {
@@ -105,7 +116,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const { userid /*, buyerid*/ } = req.params;
-      const { category, page, limit } = req.query;
+      const { category, page, limit, product_type } = req.query;
 
       const user: any = await User.findById(userid).lean();
       const userid_admin = user?.created_by || null;
@@ -125,6 +136,10 @@ router.get(
 
       if (category) {
         query.category = category;
+      }
+
+      if (product_type) {
+        query.product_type = product_type;
       }
 
       const [totalProducts, products] = await Promise.all([
@@ -182,7 +197,8 @@ router.put('/:id', checkAccess("inventory", "edit"), async (req: Request, res: R
 // POST /api/inventory
 router.post('/', checkAccess("inventory", "create"), async (req: Request, res: Response) => {
   try {
-    const { reference_number } = req.body;
+    let { reference_number } = req.body;
+    if (reference_number === "NaN") reference_number = "";
 
     // Check if inventory with same reference_number already exists
     if (reference_number) {

@@ -39,10 +39,15 @@ const getNextReferenceNumber = async (): Promise<number> => {
       .sort({ created_at: -1 }) // 🔥 latest created
       .select('reference_number created_at');
 
-    const lastRef = lastProduct?.reference_number;
+    if (!lastProduct || !lastProduct.reference_number) {
+      return 1;
+    }
+
+    const lastRef = lastProduct.reference_number;
     console.log("lastRef", lastRef)
 
-    return typeof lastRef === 'number' ? lastRef + 1 : Number(lastRef) + 1;
+    const nextRef = Number(lastRef);
+    return isNaN(nextRef) ? 1 : nextRef + 1;
   } catch (error) {
     console.error('Error getting next reference number:', error);
 
@@ -84,24 +89,24 @@ const InventorySchema: Schema = new Schema({
 // Pre-save hook to set product_id and reference_number
 InventorySchema.pre('save', async function (next) {
   try {
+    // Normalize reference_number to empty string if missing or invalid "NaN"
+    if (!this.reference_number || this.reference_number === "NaN") {
+      this.reference_number = "";
+    }
+
+    // Ensure name doesn't contain "NaN"
+    if (!this.name || this.name.includes("NaN")) {
+      this.name = `#${this.reference_number || ""}`;
+    }
+
     if (this.isNew) {
       if (!this.product_id) {
         this.product_id = generateProductId();
       }
       console.log("this.reference_number", this.reference_number)
-      if (!this.reference_number) {
-        //console.log("this.reference_number_inside",await getNextReferenceNumber()) 
-        const reference_number = await getNextReferenceNumber()
-        console.log("reference_numberrr", reference_number)
-        this.reference_number = reference_number
-
-      }
-      if (!this.name) {
-        this.name = `#${this.reference_number || ""}`
-
-      }
-      console.log("this.name", this.name)
     }
+
+    console.log("this.name", this.name)
 
     this.updated_at = new Date();
 
