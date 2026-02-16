@@ -26,41 +26,43 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res) => {
 });
 
 // Create or Update personal settings (authentication required)
-router.post('/', authenticateJWT, async (req: AuthRequest, res) => {
-  try {
-    const existing = await PersonalSettings.findOne({ user_id: req.user.id });
-    
-    if (existing) {
-      Object.assign(existing, req.body);
-      await existing.save();
-      return res.json({ message: 'Settings updated', settings: existing });
-    } else {
-      const created = await PersonalSettings.create({
-        ...req.body,
-        user_id: req.user.id
-      });
-      return res.status(201).json({ message: 'Settings created', settings: created });
+router.post('/',
+  authenticateJWT,
+  async (req: AuthRequest, res) => {
+    try {
+      const existing = await PersonalSettings.findOne({ user_id: req.user.id });
+
+      if (existing) {
+        Object.assign(existing, req.body);
+        await existing.save();
+        return res.json({ message: 'Settings updated', settings: existing });
+      } else {
+        const created = await PersonalSettings.create({
+          ...req.body,
+          user_id: req.user.id
+        });
+        return res.status(201).json({ message: 'Settings created', settings: created });
+      }
+    } catch (err) {
+      res.status(500).json({ error: 'Server error' });
     }
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
+  });
 
 // Update specific units (authentication required)
 router.patch('/units', authenticateJWT, async (req: AuthRequest, res) => {
   try {
     const { units } = req.body;
-    
+
     if (!Array.isArray(units)) {
       return res.status(400).json({ error: 'Units must be an array' });
     }
-    
+
     const settings = await PersonalSettings.findOneAndUpdate(
       { user_id: req.user.id },
       { units },
       { new: true, upsert: true }
     );
-    
+
     res.json({ message: 'Units updated', settings });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -71,25 +73,25 @@ router.patch('/units', authenticateJWT, async (req: AuthRequest, res) => {
 router.patch('/default-unit', authenticateJWT, async (req: AuthRequest, res) => {
   try {
     const { default_unit } = req.body;
-    
+
     if (!default_unit || typeof default_unit !== 'string') {
       return res.status(400).json({ error: 'Default unit must be a valid string' });
     }
-    
+
     const settings = await PersonalSettings.findOne({ user_id: req.user.id });
-    
+
     if (!settings) {
       return res.status(404).json({ error: 'Settings not found' });
     }
-    
+
     // Check if the default_unit exists in the units array
     if (!settings.units.includes(default_unit)) {
       return res.status(400).json({ error: 'Default unit must be one of the existing units' });
     }
-    
+
     settings.default_unit = default_unit;
     await settings.save();
-    
+
     res.json({ message: 'Default unit updated', settings });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

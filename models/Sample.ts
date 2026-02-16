@@ -37,7 +37,8 @@ const SampleSchema = new Schema({
       price: { type: Number, required: true },
       shippingCost: { type: Number, required: true },
       reference_number: { type: String },
-      product_type: { type: Schema.Types.ObjectId, ref: 'ProductType' }
+      product_type: { type: Schema.Types.ObjectId, ref: 'ProductType' },
+      status: { type: String, default: 'holding' }
     }
   ]
 })
