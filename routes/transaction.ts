@@ -210,10 +210,12 @@ router.put('/:id',
 
       const transactionType = existingTransaction.type;
       const the_user = await User.findById(user_id || existingTransaction.user_id);
-      const the_buyer = await Buyer.findById(buyer_id || existingTransaction.buyer_id);
+      //const the_buyer = await Buyer.findById(buyer_id || existingTransaction.buyer_id);
 
-      if (!the_user || !the_buyer) {
-        return res.status(404).json({ error: 'User or buyer not found' });
+      if (!the_user
+        //  || !the_buyer
+      ) {
+        return res.status(404).json({ error: 'User not found' });
       }
 
       if (transactionType !== 'payment') {
@@ -342,9 +344,9 @@ router.put('/:id',
           const displayPrice = Number(transactionType === 'sale' ? (item.sale_price || item.price || 0) : (item.price || 0));
           const displayUnit = item.unit === 'per piece' ? 'pcs' : (item.unit === 'pounds' ? 'lbs' : (item.unit === 'gram' ? 'g' : (item.unit === 'kg' ? 'kg' : item.unit)));
           description += `${item.qty} ${displayUnit} of ${item.name} (@ $${displayPrice.toFixed(2)})`;
-          if (item.shipping) {
-            description += ` + shipping $${(Number(item.shipping) * Number(item.qty)).toFixed(2)}`;
-          }
+          // if (item.shipping) {
+          //   description += ` + shipping $${(Number(item.shipping) * Number(item.qty)).toFixed(2)}`;
+          // }
           description += `\n`;
         }
 

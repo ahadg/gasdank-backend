@@ -6,7 +6,7 @@ export interface ISample extends Document {
   user_id: mongoose.Types.ObjectId
   status: string
   created_at: Date
-  totalShippingCost : number,
+  totalShippingCost: number,
   products: {
     name: string
     category_id: mongoose.Types.ObjectId
@@ -15,6 +15,8 @@ export interface ISample extends Document {
     measurement: number
     price: number
     shippingCost: number
+    reference_number?: string
+    product_type?: mongoose.Types.ObjectId
   }[]
 }
 
@@ -24,7 +26,7 @@ const SampleSchema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, default: 'holding' },
   created_at: { type: Date, default: Date.now },
-  totalShippingCost : {type : Number, required : true},
+  totalShippingCost: { type: Number, required: true },
   products: [
     {
       name: { type: String, required: true },
@@ -33,7 +35,9 @@ const SampleSchema = new Schema({
       unit: { type: String, required: true },
       measurement: { type: Number, required: true },
       price: { type: Number, required: true },
-      shippingCost: { type: Number, required: true }
+      shippingCost: { type: Number, required: true },
+      reference_number: { type: String },
+      product_type: { type: Schema.Types.ObjectId, ref: 'ProductType' }
     }
   ]
 })

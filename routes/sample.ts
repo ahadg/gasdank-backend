@@ -119,17 +119,20 @@ router.post('/', async (req: Request, res: Response) => {
       const qty = Number(product.qty) || 0;
       const price = Number(product.price) || 0;
       const shipping_per_unit = Number(product.shippingCost) || 0;
+      const measurement = Number(product.measurement) || 1;
+      const multiplier = product.unit === 'per piece' ? 1 : measurement;
 
-      const productTotalPrice = price * qty;
+      const productTotalPrice = price * qty * multiplier;
       const productTotalShipping = Number(shipping_per_unit * qty).toFixed(2);
       const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
 
       // Build description string
-      description += `${qty} ${displayUnit} of ${product.name} (@ ${formatCurrency(price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
+      const refText = product.reference_number ? ` (Ref: ${product.reference_number})` : '';
+      description += `${qty} ${displayUnit}${refText} of ${product.name} (@ ${formatCurrency(price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
 
       // Add to totals
       totalPrice += productTotalPrice;
-      totalPriceWithShipping += (price + shipping_per_unit) * qty;
+      totalPriceWithShipping += (price * multiplier + shipping_per_unit) * qty;
       totalShipping += Number(productTotalShipping);
     }
 
@@ -211,15 +214,20 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
       const qty = Number(product.qty) || 0;
       const price = Number(product.price) || 0;
       const shipping_per_unit = Number(product.shippingCost) || 0;
+      const measurement = Number(product.measurement) || 1;
+      const multiplier = product.unit === 'per piece' ? 1 : measurement;
 
-      const productTotalPrice = price * qty;
+      const productTotalPrice = price * qty * multiplier;
       const productTotalShipping = Number(shipping_per_unit * qty).toFixed(2);
       const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
 
       // Create inventory item
       const inventoryItem = await Inventory.create({
         name: product.name,
-        qty: qty,
+        qty: qty * multiplier, // Store total quantity in inventory? 
+        // Wait, normally qty in inventory is total units. 
+        // In transaction.ts, it says: qtyChange = round((newItem.qty || 0) * (newItem.measurement || 1));
+        // So yes, qty * multiplier should be stored as the total inventory quantity.
         unit: product.unit,
         user_id: sample.user_id,
         user_created_by_id: user?.created_by,
@@ -227,22 +235,24 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
         category: product.category_id,
         price: price,
         shippingCost: shipping_per_unit.toFixed(2),
-        product_id: generateProductId()
+        product_id: generateProductId(),
+        reference_number: product.reference_number,
+        product_type: product.product_type
       });
 
       // Create transaction item record
       const transactionItem = new TransactionItem({
-        transaction_id: transaction[0]._id,
+        transaction_id: n_transaction._id,
         inventory_id: inventoryItem._id,
         user_id: sample.user_id,
         buyer_id: sample.buyer_id,
         qty: qty,
-        measurement: 1, // assuming 1:1 measurement for samples
+        measurement: measurement,
         shipping: shipping_per_unit,
         type: "sample_addition",
         unit: product.unit,
         price: price,
-        sale_price: price, // assuming sale_price equals price for samples
+        sale_price: price,
       });
 
       await transactionItem.save();
@@ -251,11 +261,12 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
       transactionItemIds.push({ transactionitem_id: transactionItem._id });
 
       // Build description string
-      description += `${qty} ${displayUnit} of ${product.name} (@ ${formatCurrency(price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
+      const refText = product.reference_number ? ` (Ref: ${product.reference_number})` : '';
+      description += `${qty} ${displayUnit}${refText} of ${product.name} (@ ${formatCurrency(price)}) + (🚚 ${formatCurrency(Number(productTotalShipping))}) \n`;
 
       // Add to totals
       totalPrice += productTotalPrice;
-      totalPriceWithShipping += (price + shipping_per_unit) * qty;
+      totalPriceWithShipping += (price * multiplier + shipping_per_unit) * qty;
       totalShipping += Number(productTotalShipping);
     }
     // create notification
@@ -328,28 +339,10 @@ router.post('/:id/return', async (req, res) => {
   // Create detailed product list for SMS
   const productList = sample.products.map((product: any) => {
     const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
-    return `${product.name} (${product.qty} ${displayUnit})`
+    const refText = product.reference_number ? ` [Ref: ${product.reference_number}]` : '';
+    return `${product.name}${refText} (${product.qty} ${displayUnit})`
   }).join(', ')
-  // {
-  //   _id: new ObjectId("685fd223a92f28d9d4481d4b"),
-  //   user_id: new ObjectId("6818fce5b2ca3e2d8df7e158"),
-  //   buyer_id: new ObjectId("68544f4c20aef3c79d03db44"),
-  //   worker_id: null,
-  //   sample_id: new ObjectId("685fd222a92f28d9d4481d47"),
-  //   payment_direction: 'given',
-  //   payment_method: 'Credit',
-  //   type: 'sample_recieved',
-  //   notes: 'Sample Recieved ',
-  //   price: 40,
-  //   total_shipping: 10,
-  //   profit: 0,
-  //   items: [],
-  //   edited: false,
-  //   created_at: 2025-06-28T11:29:39.256Z,
-  //   updated_at: 2025-06-28T11:29:39.256Z,
-  //   prevValues: [],
-  //   __v: 0
-  // }
+  // ... (skipped comments)
   console.log("prev_transaction", req.params.id, prev_transaction)
   const user = await User.findById(sample?.user_id);
 
@@ -366,7 +359,10 @@ router.post('/:id/return', async (req, res) => {
     notes: `Sample Returned `,
     payment_method: "Debit", // or whatever default you prefer
   });
-  const priceWithShipping = sample?.products?.reduce((sum: any, product: any) => sum + (product.shippingCost + product?.price) * product.qty, 0)
+  const priceWithShipping = sample?.products?.reduce((sum: any, product: any) => {
+    const multiplier = product.unit === 'per piece' ? 1 : (Number(product.measurement) || 1);
+    return sum + (product.shippingCost + product?.price * multiplier) * product.qty;
+  }, 0)
   await Buyer.findByIdAndUpdate(prev_transaction?.[0]?.buyer_id, {
     $inc: { currentBalance: priceWithShipping }
   });
@@ -376,7 +372,7 @@ router.post('/:id/return', async (req, res) => {
     buyer_id: sample?.buyer_id,
     type: "sample_return",
     transaction_id: transaction._id,
-    amount: (prev_transaction[0]?.price),
+    amount: priceWithShipping, // Use the calculated price with shipping for consistent logging
     description: productList,
   });
 
