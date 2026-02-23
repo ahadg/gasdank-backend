@@ -222,7 +222,7 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
       const productTotalPrice = price * qty * multiplier;
       const productTotalShipping = Number(shipping_per_unit * qty).toFixed(2);
       const displayUnit = product.unit === 'per piece' ? 'pcs' : (product.unit === 'pounds' ? 'lbs' : (product.unit === 'gram' ? 'g' : (product.unit === 'kg' ? 'kg' : product.unit)));
-
+      console.log("creating inventory from sample")
       // Create inventory item
       const inventoryItem = await Inventory.create({
         name: product.name,
@@ -464,7 +464,8 @@ router.post('/:id/product/:productId/accept', async (req: AuthenticatedRequest, 
       shippingCost: shipping_per_unit.toFixed(2),
       product_id: generateProductId(),
       reference_number: product.reference_number,
-      product_type: product.product_type
+      product_type: product.product_type,
+      notes: "sample"
     });
 
     // Handle transaction logic (simplified for single product)
