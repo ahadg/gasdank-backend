@@ -236,7 +236,8 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
         shippingCost: shipping_per_unit.toFixed(2),
         product_id: generateProductId(),
         reference_number: product.reference_number,
-        product_type: product.product_type
+        product_type: product.product_type,
+        notes: "sample"
       });
 
       // Create transaction item record

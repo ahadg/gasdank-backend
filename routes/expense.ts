@@ -104,6 +104,9 @@ router.post('/', async (req: Request, res: Response) => {
 
 
     const balanceOwner = await User.getBalanceOwner(user_id);
+    if (amount > balanceOwner?.cash_balance) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
     if (balanceOwner) {
       await User.findByIdAndUpdate(balanceOwner._id, {
         $inc: { cash_balance: -amount }

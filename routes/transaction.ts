@@ -495,7 +495,7 @@ router.get('/history/:buyer_id/:user_id', checkAccess("wholesale", "read"), asyn
         path: 'sample_id',
         model: 'Sample'
       })
-      .sort({ created_at: 1 }); // Sort by date ascending
+      .sort({ created_at: -1 }); // Sort by date descending
 
     res.status(200).json(transactions);
   } catch (error: any) {

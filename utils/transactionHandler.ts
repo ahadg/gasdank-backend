@@ -63,7 +63,7 @@ export interface TransactionResult {
  */
 const validatePayload = (payload: TransactionPayload): { isValid: boolean; error?: string } => {
   if (!payload.user_id || !Types.ObjectId.isValid(payload.user_id)) {
-    return { isValid: false, error: 'Valid user_id is required' };
+    return { isValid: false, error: 'Valid user_id is required || Admin cant create transaction' };
   }
   // if (!payload.buyer_id || !Types.ObjectId.isValid(payload.buyer_id)) {
   //   return { isValid: false, error: 'Valid buyer_id is required' };
