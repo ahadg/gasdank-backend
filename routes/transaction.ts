@@ -412,7 +412,7 @@ router.put('/:id',
 
           existingTransaction.sale_price = roundCurrency(totalSalePrice);
           existingTransaction.price = roundCurrency(totalOrgPrice);
-          existingTransaction.profit = roundCurrency(totalSalePrice - totalOrgPrice - totalShippingCost);
+          existingTransaction.profit = roundCurrency(totalSalePrice - totalOrgPrice);
           //+ (total_shipping || 0);
         }
       }
