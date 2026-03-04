@@ -181,7 +181,7 @@ const calculateItemTotal = (item: any, transactionType: string = 'sale', addShip
 
 // Helper function to calculate total transaction amount
 const calculateTransactionTotal = (items: any[], shipping: number = 0, transactionType: string = 'sale', addShipping: boolean = true) => {
-  return items.reduce((total, item) => total + calculateItemTotal(item, transactionType, addShipping), 0)
+  return items.reduce((total, item) => total + calculateItemTotal(item, transactionType, false), 0)
   //+ shipping;
 };
 
@@ -222,8 +222,12 @@ router.put('/:id',
         // Process inventory and balance changes for sale/return/inventory_addition transactions
 
         // Calculate original totals using the correct price field
-        const originalTotal = calculateTransactionTotal(original_items || [], original_total_shipping || 0, transactionType, true);
-        const newTotal = calculateTransactionTotal(items || [], total_shipping || 0, transactionType, true);
+        const originalTotal = calculateTransactionTotal(original_items || [],
+          //original_total_shipping || 
+          0, transactionType, true);
+        const newTotal = calculateTransactionTotal(items || [],
+          //total_shipping || 
+          0, transactionType, true);
         const totalDifference = (newTotal - originalTotal).toFixed(2);
 
         console.log({ originalTotal, newTotal, totalDifference, transactionType });
