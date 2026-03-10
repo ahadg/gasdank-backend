@@ -7,10 +7,23 @@ import User from '../models/User';
 const router = Router();
 router.use(authenticateJWT);
 
+router.get('/detail/:id', checkAccess("config.categories", "read"), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+    res.status(200).json(category);
+  } catch (error) {
+    res.status(500).json({ error });
+  }
+});
+
 router.get('/:userid', checkAccess("config.categories", "read"), async (req: Request, res: Response) => {
   try {
     const { userid } = req.params;
-    const { type = 'general' } = req.query; // Get type from query params
+    const { type = 'general', status = 'active' } = req.query; // Get type and status from query params
 
     const user: any = await User.findById(userid);
     if (!user) {
@@ -24,8 +37,13 @@ router.get('/:userid', checkAccess("config.categories", "read"), async (req: Req
 
     // Filter by type if provided, otherwise get all
     const query: any = { user_id: { $in: userIds } };
-    if (type != 'both') {
-      query.type = type;
+    // if (type != 'both') {
+    //   query.type = type;
+    // }
+
+    // Default to active only unless status is 'all'
+    if (status !== 'all') {
+      query.active = true;
     }
 
     const categories = await Category.find(query);
