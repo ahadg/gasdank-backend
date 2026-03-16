@@ -206,7 +206,7 @@ router.post('/', checkAccess("inventory", "create"), async (req: Request, res: R
       console.log("user_id", req.user?.id)
       const existingInventory = await Inventory.findOne({ reference_number, user_id: req.user?.id });
       if (existingInventory) {
-        return res.status(400).json({ error: 'Inventory with this reference number already exists' });
+        return res.status(400).json({ error: `Inventory with reference number "${reference_number}" already exists` });
       }
     }
 
@@ -224,7 +224,15 @@ router.post('/', checkAccess("inventory", "create"), async (req: Request, res: R
     });
     res.status(201).json(newProduct);
   } catch (error: any) {
-    console.log("error", error)
+    console.log("error", error);
+    // Handle MongoDB duplicate key error (11000)
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0];
+      const value = error.keyValue?.[field];
+      return res.status(400).json({ 
+        error: `Duplicate record: The ${field} "${value}" is already in use.` 
+      });
+    }
     res.status(500).json({ error: error.message || error });
   }
 });

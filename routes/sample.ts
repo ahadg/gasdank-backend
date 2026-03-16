@@ -332,9 +332,16 @@ router.post('/:id/accept', async (req: AuthenticatedRequest, res) => {
       //total_amount: roundBalance
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error accepting sample:', error);
-    res.status(500).json({ error: error });
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0];
+      const value = error.keyValue?.[field];
+      return res.status(400).json({ 
+        error: `Duplicate record: The ${field} "${value}" is already in use during inventory creation.` 
+      });
+    }
+    res.status(500).json({ error: error.message || error });
   }
 });
 
@@ -518,7 +525,14 @@ router.post('/:id/product/:productId/accept', async (req: AuthenticatedRequest, 
     res.status(200).json({ message: 'Product accepted and moved to inventory' });
   } catch (error: any) {
     console.error('Error accepting product:', error);
-    res.status(500).json({ error: error.message });
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0];
+      const value = error.keyValue?.[field];
+      return res.status(400).json({ 
+        error: `Duplicate record: The ${field} "${value}" is already in use during inventory creation.` 
+      });
+    }
+    res.status(500).json({ error: error.message || error });
   }
 });
 

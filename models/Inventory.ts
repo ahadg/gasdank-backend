@@ -20,15 +20,17 @@ export interface IInventory extends Document {
   updated_at: Date;
 }
 
-// Function to generate product ID with format MANA-YYMMDDHHMM
+// Function to generate product ID with format MANA-YYMMDDHHMMRRRR
 export const generateProductId = () => {
   const now = new Date();
   const year = now.getFullYear().toString().slice(2);
+  const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const hour = String(now.getHours()).padStart(2, '0');
-  const randomDigits = Math.floor(100 + Math.random() * 900); // 3-digit random number
+  const minute = String(now.getMinutes()).padStart(2, '0');
+  const randomDigits = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
 
-  return `MANA-${year}${day}${hour}${randomDigits}`;
+  return `MANA-${year}${month}${day}${hour}${minute}${randomDigits}`;
 };
 
 // Function to get next reference number
