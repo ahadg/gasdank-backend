@@ -28,9 +28,11 @@ export const generateProductId = () => {
   const day = String(now.getDate()).padStart(2, '0');
   const hour = String(now.getHours()).padStart(2, '0');
   const minute = String(now.getMinutes()).padStart(2, '0');
+  const second = String(now.getSeconds()).padStart(2, '0');
+  const millisecond = String(now.getMilliseconds()).padStart(3, '0');
   const randomDigits = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
 
-  return `MANA-${year}${month}${day}${hour}${minute}${randomDigits}`;
+  return `MANA-${year}${month}${day}${hour}${minute}${second}${millisecond}${randomDigits}`;
 };
 
 // Function to get next reference number
