@@ -36,7 +36,7 @@ router.get('/:userid', checkAccess("config.categories", "read"), async (req: Req
     const userIds = [adminId, ...usersUnderAdmin.map(u => u._id)];
 
     // Filter by type if provided, otherwise get all
-    const query: any = { user_id: { $in: userIds } };
+    const query: any = { user_id: { $in: userIds }, type: type };
     // if (type != 'both') {
     //   query.type = type;
     // }
